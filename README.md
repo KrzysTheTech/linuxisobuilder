@@ -8,10 +8,12 @@ This project provides a simple C++ based interactive tool that guides the user t
 
 **Version: 0.0.1**
 
+***
+
 ## 📦 Prerequisites
 
-Before you begin, you need to have `live-build` and `g++` (or another C++ compiler) installed.
+Before you begin, you need to have `live-build` and the `build-essential` package installed. `build-essential` includes all the necessary tools for compiling, such as `make` and `g++`.
 
 ```bash
 sudo apt-get update
-sudo apt-get install live-build g++
+sudo apt-get install live-build build-essential
