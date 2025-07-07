@@ -26,10 +26,11 @@ int display_menu(const std::string& title, const std::vector<std::string>& optio
 }
 
 // Function to execute the live-build command
-void run_live_build(const std::string& distro, const std::string& desktop) {
-    std::string command = "lb config -d " + distro + " --debian-installer live";
-    if (!desktop.empty() && desktop != "No X11") {
-        command += " -p " + desktop;
+void run_live_build(const std::string& distro_codename, const std::string& desktop_package) {
+    std::string command = "lb config -d " + distro_codename + " --debian-installer live";
+    if (!desktop_package.empty()) {
+        // CORRECTED: Use --packages instead of -p
+        command += " --packages " + desktop_package;
     }
     
     std::cout << "\nPreparing to run the following command: " << std::endl;
@@ -45,7 +46,7 @@ void run_live_build(const std::string& distro, const std::string& desktop) {
         int result = system(command.c_str());
         if (result == 0) {
             std::cout << "\nConfiguration created successfully." << std::endl;
-            std::cout << "Navigate to the new directory and run 'lb build' to create the ISO." << std::endl;
+            std::cout << "Navigate to the new directory and run 'sudo lb build' to create the ISO." << std::endl;
         } else {
             std::cerr << "An error occurred while running the command." << std::endl;
         }
@@ -116,7 +117,7 @@ int main() {
         else if (selected_desktop == "KDE") desktop_package = "kde-standard";
         else if (selected_desktop == "XFCE") desktop_package = "xfce4";
         else if (selected_desktop == "LXQT") desktop_package = "lxqt";
-
+        // If "No X11 (Server)" is chosen, desktop_package remains empty, and no desktop is added.
 
         run_live_build(distro_codename, desktop_package);
 
