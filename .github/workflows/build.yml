@@ -1,0 +1,69 @@
+# GitHub Actions Workflow: Build and Package
+#
+# This workflow compiles the C++ application and packages it into
+# two formats: a Debian package (.deb) and a compressed tarball (.tar.xz).
+
+name: Build and Package
+
+# 🚀 Triggers the workflow on push or pull request events for the main branch
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    # 🏃‍♂️ Runs the job on the latest version of Ubuntu
+    runs-on: ubuntu-latest
+
+    steps:
+      # 📚 Step 1: Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 🛠️ Step 2: Install dependencies
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev
+
+      # 👨‍💻 Step 3: Compile the application
+      - name: Compile C++ application
+        run: make
+
+      # 📦 Step 4: Create the tar.xz archive
+      - name: Package as tar.xz
+        run: tar -cJf linuxisobuilder.tar.xz build-iso README.md
+
+      # 📦 Step 5: Prepare and build the Debian (.deb) package
+      - name: Build Debian package
+        run: |
+          # Create the Debian package structure
+          mkdir -p debian/DEBIAN
+          mkdir -p debian/usr/local/bin
+          
+          # Copy the compiled binary to the correct location
+          cp build-iso debian/usr/local/bin/
+          
+          # Create the control file required for the .deb package
+          echo "Package: linuxisobuilder" > debian/DEBIAN/control
+          echo "Version: 0.0.1" >> debian/DEBIAN/control
+          echo "Architecture: all" >> debian/DEBIAN/control
+          echo "Maintainer: KrzysTheTech" >> debian/DEBIAN/control
+          echo "Description: A tool to create custom Linux ISOs." >> debian/DEBIAN/control
+          
+          # Build the .deb file
+          dpkg-deb --build debian linuxisobuilder.deb
+
+      # 📤 Step 6: Upload the tar.xz artifact
+      - name: Upload tar.xz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linuxisobuilder-archive
+          path: linuxisobuilder.tar.xz
+
+      # 📤 Step 7: Upload the .deb package artifact
+      - name: Upload .deb package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linuxisobuilder-deb-package
+          path: linuxisobuilder.deb
