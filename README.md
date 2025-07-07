@@ -6,7 +6,7 @@ A command-line tool to simplify the creation of custom Ubuntu and Debian based I
 
 This project provides a simple C++ based interactive tool that guides the user through selecting a distribution, version, and desktop environment. It then generates the necessary `live-build` configuration to build a custom live CD.
 
-**Version: 0.0.1**
+**Version: 0.0.2**
 
 ***
 
