@@ -28,7 +28,8 @@ jobs:
 
       # 👨‍💻 Step 3: Compile the application
       - name: Compile C++ application
-        run: make
+        # Use sudo to grant make the permission to execute g++
+        run: sudo make
 
       # 📦 Step 4: Create the tar.xz archive
       - name: Package as tar.xz
@@ -46,13 +47,13 @@ jobs:
           
           # Create the control file required for the .deb package
           echo "Package: linuxisobuilder" > debian/DEBIAN/control
-          echo "Version: 0.0.1" >> debian/DEBIAN/control
+          echo "Version: 0.0.2" >> debian/DEBIAN/control
           echo "Architecture: all" >> debian/DEBIAN/control
           echo "Maintainer: KrzysTheTech" >> debian/DEBIAN/control
           echo "Description: A tool to create custom Linux ISOs." >> debian/DEBIAN/control
           
-          # Build the .deb file
-          dpkg-deb --build debian linuxisobuilder.deb
+          # Build the .deb file using sudo to ensure correct file ownership
+          sudo dpkg-deb --build debian linuxisobuilder.deb
 
       # 📤 Step 6: Upload the tar.xz artifact
       - name: Upload tar.xz artifact
