@@ -31,17 +31,30 @@ jobs:
         uses: actions/cache@v4
         with:
           path: cache
-          key: ${{ runner.os }}-installer-amd64-exp-${{ hashFiles('config/package-lists/my.list.chroot', 'config/archives/experimental.list.chroot') }}
+          key: ${{ runner.os }}-installer-amd64-exp-${{ hashFiles('config/includes.chroot/etc/apt/**/*') }}
           restore-keys: |
             ${{ runner.os }}-installer-amd64-exp-
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y live-build debootstrap
 
-      - name: Create Experimental Repo and APT Pinning Config
+      - name: Prepare APT Configuration
         run: |
-          mkdir -p config/archives config/includes.chroot/etc/apt/preferences.d
-          echo "deb http://deb.debian.org/debian/ experimental main" > config/archives/experimental.list.chroot
+          # Create directories for APT sources and preferences
+          mkdir -p config/includes.chroot/etc/apt/sources.list.d
+          mkdir -p config/includes.chroot/etc/apt/preferences.d
+
+          # Manually create the primary sources.list file
+          cat <<EOF > config/includes.chroot/etc/apt/sources.list
+          deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
+          EOF
+
+          # Manually create the experimental sources file
+          cat <<EOF > config/includes.chroot/etc/apt/sources.list.d/experimental.list
+          deb http://deb.debian.org/debian experimental main contrib non-free non-free-firmware
+          EOF
+
+          # Configure APT pinning to prioritize Sid, but force kernel from Experimental
           cat <<EOF > config/includes.chroot/etc/apt/preferences.d/experimental.pref
           Package: *
           Pin: release a=experimental
@@ -66,6 +79,7 @@ jobs:
           EOF
           cat <<EOF > config/hooks/chroot/99-compile-schemas.hook.chroot
           #!/bin/sh
+          set -e
           glib-compile-schemas /usr/share/glib-2.0/schemas/
           EOF
           chmod +x config/hooks/chroot/99-compile-schemas.hook.chroot
@@ -84,10 +98,10 @@ jobs:
             --mode debian \
             --architecture amd64 \
             --distribution sid \
-            --archive-areas "main contrib non-free non-free-firmware" \
-            --mirror-bootstrap "http://deb.debian.org/debian/" \
-            --mirror-chroot "http://deb.debian.org/debian/" \
-            --mirror-binary "http://deb.debian.org/debian/" \
+            # --archive-areas flag is removed, as we now provide the sources.list manually
+            --mirror-bootstrap "http://deb.debian.org/debian" \
+            --mirror-chroot "http://deb.debian.org/debian" \
+            --mirror-binary "http://deb.debian.org/debian" \
             --debian-installer-distribution sid \
             --binary-images iso-hybrid \
             --iso-application "Debian Sid GNOME Installer (Experimental Kernel)" \
