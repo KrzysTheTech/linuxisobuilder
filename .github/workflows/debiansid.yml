@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # ADD THIS LINE TO SET THE TIMEOUT TO THE 6-HOUR MAXIMUM
+    timeout-minutes: 360
     strategy:
       matrix:
         arch: [amd64, arm64, riscv64]
@@ -17,7 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ADD THIS STEP TO FREE UP DISK SPACE
       - name: Maximize Build Space
         run: |
           echo "Freeing up disk space..."
@@ -51,16 +52,13 @@ jobs:
 
       - name: Create package list
         run: |
-          # A more realistic package list for a single-desktop ISO
+          # Consider removing large packages like kdenlive for the riscv64 build to save time
           echo "task-gnome-desktop" > config/package-lists/gnome.list.chroot
           echo "firefox" >> config/package-lists/gnome.list.chroot
           echo "vlc" >> config/package-lists/gnome.list.chroot
           echo "ffmpeg" >> config/package-lists/gnome.list.chroot
           echo "build-essential" >> config/package-lists/gnome.list.chroot
-          # NOTE: crossbuild-essential-* is very large. Uncomment only if absolutely needed.
-          # echo "crossbuild-essential-*" >> config/package-lists/gnome.list.chroot
           echo "kdenlive" >> config/package-lists/gnome.list.chroot
-          # NOTE: Removed task-kde-desktop and task-xfce-desktop for a focused build.
 
       - name: Build the ISO
         run: |
@@ -71,10 +69,8 @@ jobs:
           ISO_NAME="debian-live-$(date +%Y%m%d)-${{ matrix.arch }}-gnome.iso"
           mv live-image-${{ matrix.arch }}.hybrid.iso "debian-sid-gnome-installer-$(date +%Y%m%d)-${{ matrix.arch }}.iso"
 
-
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
           name: debian-sid-gnome-installer-${{ matrix.arch }}
           path: debian-sid-gnome-installer-*-${{ matrix.arch }}.iso
-
