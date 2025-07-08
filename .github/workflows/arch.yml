@@ -19,10 +19,15 @@ jobs:
 
           pacman -Syu --noconfirm git base-devel archiso wget
 
-          # Create profile
+          # Copy official releng profile
           cp -r /usr/share/archiso/profiles/releng/ archlive
 
-          # Basic packages
+          # Create required dirs
+          mkdir -p archlive/airootfs/etc/calamares/{modules,scripts,branding/archlinux}
+          mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
+          mkdir -p archlive/airootfs/root
+
+          # Minimal packages
           cat <<EOPKG > archlive/packages.x86_64
           base linux linux-firmware sudo
           grub mtools syslinux edk2-shell
@@ -31,11 +36,7 @@ jobs:
           wget git fastfetch
           EOPKG
 
-          mkdir -p archlive/airootfs/etc/calamares/{modules,scripts,branding/archlinux}
-          mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
-          mkdir -p archlive/airootfs/root
-
-          # install_yay.sh
+          # yay install script
           cat <<'EOSH' > archlive/airootfs/etc/calamares/scripts/install_yay.sh
           #!/bin/bash
           pacman -S --noconfirm --needed git base-devel
@@ -47,8 +48,8 @@ jobs:
           EOSH
           chmod +x archlive/airootfs/etc/calamares/scripts/install_yay.sh
 
-          # settings.conf
-          cat <<EOFSET > archlive/airootfs/etc/calamares/settings.conf
+          # Calamares configs
+          cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
           modules-load:
             - welcome
             - keyboard
@@ -63,9 +64,8 @@ jobs:
           branding: archlinux
           prompt-install: false
           -id: preserve-user-home-on-reinstall
-          EOFSET
+          EOF
 
-          # unpackfs.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
           ---
           unpack:
@@ -74,7 +74,6 @@ jobs:
               destination: ""
           EOF
 
-          # shellprocess.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/shellprocess.conf
           ---
           scripts:
@@ -84,21 +83,25 @@ jobs:
               comment: "Installing yay AUR helper"
           EOF
 
-          # netinstall.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/netinstall.conf
           ---
           source: "/etc/calamares/netinstall.yaml"
           preScript: "yay -Syu --noconfirm"
           install:
-              - "yay -S --noconfirm"
+            - "yay -S --noconfirm"
           EOF
 
-          # netinstall.yaml
+          # Netinstall group selection with yay, kdenlive, ollama, and games
           cat <<'EOF' > archlive/airootfs/etc/calamares/netinstall.yaml
           packages:
-            - name: "🧠 Kernels"
-              description: "Alternative Linux kernels"
-              packages: [linux-lts, linux-zen, linux-hardened]
+            - name: "🎥 Video Editing"
+              packages: [kdenlive, shotcut, olive, openshot]
+
+            - name: "🧠 AI & ML"
+              packages: [ollama, python-pytorch, python-tensorflow, jupyterlab, spyder]
+
+            - name: "🎮 Games"
+              packages: [steam, lutris, heroic-games-launcher-bin, wine, retroarch, dolphin-emu, supertyuxkart, 0ad, minetest, xonotic, hedgewars, openarena, gamemode, mangohud]
 
             - name: "🖥️ Desktop Environments"
               exclusive: true
@@ -113,48 +116,8 @@ jobs:
                 - deepin: "Deepin"
                 - lxqt: "LXQt"
 
-            - name: "🪟 Tiling WMs"
-              description: "Tiling window managers"
+            - name: "🪟 Tiling Window Managers"
               packages: [i3-wm, sway, hyprland, bspwm, qtile, awesome, dwm, xmonad]
-
-            - name: "💡 Display Managers"
-              packages: [sddm, gdm, lightdm, lxdm]
-
-            - name: "🐚 Shells & Terminals"
-              packages: [zsh, fish, kitty, alacritty, terminator, wezterm]
-
-            - name: "📂 File Managers"
-              packages: [dolphin, thunar, nautilus, ranger, mc, krusader]
-
-            - name: "📈 System Tools"
-              packages: [htop, btop, conky, gparted, neofetch, fastfetch, powertop, iotop]
-
-            - name: "🔑 Privacy & Security"
-              packages: [keepassxc, veracrypt, ufw, gufw, firewalld, torbrowser-launcher]
-
-            - name: "🔠 Fonts"
-              packages: [noto-fonts, ttf-fira-code, ttf-jetbrains-mono, ttf-hack-nerd, ttf-cascadia-code, ttf-dejavu, ttf-liberation]
-
-            - name: "🛠️ Dev Tools"
-              packages: [base-devel, git, cmake]
-
-            - name: "👨‍💻 Editors & IDEs"
-              packages: [neovim, vim, emacs, code, geany, kate, gedit, qtcreator, sublime-text-4]
-
-            - name: "📦 Containers & VMs"
-              packages: [docker, docker-compose, podman, qemu-full, virt-manager, virtualbox, virtualbox-guest-iso]
-
-            - name: "🕸️ Web Dev"
-              packages: [nodejs, npm, deno]
-
-            - name: "🐍 Python Dev"
-              packages: [python-pip, python-virtualenv, ipython]
-
-            - name: "⚙️ Compilers"
-              packages: [clang, openjdk-src, go, rustup]
-
-            - name: "🗃️ Databases"
-              packages: [postgresql, mariadb, redis, dbeaver, sqlitebrowser]
 
             - name: "🌐 Browsers"
               packages:
@@ -163,20 +126,10 @@ jobs:
                 - vivaldi: "Vivaldi (AUR)"
                 - brave: "Brave (AUR)"
 
-            - name: "✍️ Office Tools"
-              packages: [libreoffice-fresh, onlyoffice-desktopeditors, thunderbird, evolution, zotero, joplin-desktop, calibre]
-
-            - name: "🎨 Design"
-              packages: [gimp, krita, inkscape, blender, darktable, rawtherapee, digikam, scribus, pinta, archlinux-artwork]
-
-            - name: "🎬 Multimedia"
-              packages: [vlc, mpv, celluloid, smplayer, obs-studio, kdenlive, shotcut, audacity, lmms, handbrake, spotify-launcher, strawberry, lollypop]
-
-            - name: "🎮 Gaming"
-              packages: [steam, lutris, heroic-games-launcher-bin, wine, gamemode, mangohud, bottles, retroarch, dolphin-emu, 0ad, supertuxkart, xonotic, hedgewars, extremetuxracer, warsow, classicube]
+            - name: "📦 Arch/AUR Helpers"
+              packages: [yay, paru, pikaur, trizen]
           EOF
 
-          # displaymanager.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/displaymanager.conf
           ---
           displaymanagers:
@@ -186,7 +139,6 @@ jobs:
           default: "sddm"
           EOF
 
-          # bootloader.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/bootloader.conf
           ---
           bootloader: "grub"
@@ -194,7 +146,6 @@ jobs:
           grub_install_args: ["--bootloader-id=arch"]
           EOF
 
-          # partition.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/partition.conf
           ---
           efiSystemPartition: "/boot"
@@ -204,19 +155,17 @@ jobs:
           default-filesystem: "ext4"
           EOF
 
-          # finished.conf
           cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
           ---
           reboot-now: true
           EOF
 
-          # branding.desc
           cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
           componentName: archlinux
-          welcomeText: "<h2>Welcome to the Universal Arch Linux Installer</h2><p>This installer uses <b>yay</b> to support official & AUR packages. Internet required.</p>"
+          welcomeText: "<h2>Welcome to the Universal Arch Linux Installer</h2><p>This installer uses <b>yay</b> for AUR support, and includes AI, dev, and game tools.</p>"
           EOF
 
-          # Autologin + startx + X
+          # Auto-start Calamares on boot
           cat <<EOF > archlive/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
           [Service]
           ExecStart=
@@ -235,7 +184,7 @@ jobs:
           [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
           EOF
 
-          # profile.conf
+          # ISO config
           cat <<EOF > archlive/profile.conf
           iso_name="archlinux-universal-installer"
           iso_label="ARCH_YAY_$(date +%Y%m)"
