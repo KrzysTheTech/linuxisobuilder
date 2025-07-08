@@ -18,9 +18,8 @@ jobs:
       - name: Create ISO Profile and Configuration
         run: |
           docker run --rm --entrypoint /bin/sh -v "${{ github.workspace }}":/work -w /work archlinux:latest -c '
-            # CORRECTED: Use the more stable `baseline` profile instead of `releng`
-            # This fixes the "cannot stat" error and is the recommended way.
-            cp -r /usr/share/archiso/configs/baseline/ archlive
+            # CORRECTED: This is the definitive, current path for the archiso profile template.
+            cp -r /usr/share/archiso/profiles/releng/ archlive
 
             # Define minimal package list for the live ISO
             cat <<EOF > archlive/packages.x86_64
@@ -252,3 +251,4 @@ jobs:
         with:
           name: archlinux-universal-installer-${{ env.TIMESTAMP }}-x86_64.iso
           path: out/*.iso
+          
