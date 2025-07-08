@@ -6,242 +6,259 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create ISO Profile and Configuration
+      - name: Create Docker Build Script
         run: |
-          docker run --rm --entrypoint /bin/sh -v "${{ github.workspace }}":/work -w /work archlinux:latest -c '
-            # 1. Install dependencies and copy the profile template
-            pacman -Syu --noconfirm && pacman -S --noconfirm --needed git base-devel archiso wget
-            cp -r /usr/share/archiso/profiles/releng/ archlive
+          cat <<'EOF' > docker-build.sh
+          #!/bin/bash
+          set -euxo pipefail
 
-            # 2. Define minimal package list for the live ISO
-            cat <<EOF > archlive/packages.x86_64
-            base linux linux-firmware sudo
-            grub mtools syslinux edk2-shell
-            archiso calamares networkmanager
-            xorg-server xorg-xinit openbox tint2
-            wget git fastfetch
-            EOF
+          pacman -Syu --noconfirm git base-devel archiso wget
 
-            # 3. Create all necessary Calamares config files
-            mkdir -p archlive/airootfs/etc/calamares/modules
-            mkdir -p archlive/airootfs/etc/calamares/scripts
+          # Create profile
+          cp -r /usr/share/archiso/profiles/releng/ archlive
 
-            # --- settings.conf ---
-            cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
-            modules-load:
-              - welcome
-              - keyboard
-              - partition
-              - unpackfs
-              - shellprocess
-              - netinstall
-              - users
-              - bootloader
-              - displaymanager
-              - finished
-            branding: archlinux
-            prompt-install: false
-            -id: preserve-user-home-on-reinstall
-            EOF
+          # Basic packages
+          cat <<EOPKG > archlive/packages.x86_64
+          base linux linux-firmware sudo
+          grub mtools syslinux edk2-shell
+          archiso calamares networkmanager
+          xorg-server xorg-xinit openbox tint2
+          wget git fastfetch
+          EOPKG
 
-            # --- unpackfs.conf ---
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
-            ---
-            unpack:
-              - source: "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs"
-                sourcefs: "squashfs"
-                destination: ""
-            EOF
+          mkdir -p archlive/airootfs/etc/calamares/{modules,scripts,branding/archlinux}
+          mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
+          mkdir -p archlive/airootfs/root
 
-            # --- shellprocess.conf (for installing yay) ---
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/shellprocess.conf
-            ---
-            scripts:
-              - script:
-                  - calamares-chroot-script "/etc/calamares/scripts/install_yay.sh"
-                timeout: 600
-                comment: "Installing AUR Helper (yay)..."
-            EOF
+          # install_yay.sh
+          cat <<'EOSH' > archlive/airootfs/etc/calamares/scripts/install_yay.sh
+          #!/bin/bash
+          pacman -S --noconfirm --needed git base-devel
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          sudo -u builder bash -c "cd /home/builder && git clone https://aur.archlinux.org/yay.git && cd yay && makepkg --noconfirm -si"
+          userdel -r builder
+          sed -i "/builder/d" /etc/sudoers
+          EOSH
+          chmod +x archlive/airootfs/etc/calamares/scripts/install_yay.sh
 
-            # --- install_yay.sh Script ---
-            cat <<'"EOF"' > archlive/airootfs/etc/calamares/scripts/install_yay.sh
-            #!/bin/bash
-            pacman -S --noconfirm --needed git base-devel
-            useradd -m builder
-            echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-            sudo -u builder bash -c "cd /home/builder && git clone https://aur.archlinux.org/yay.git && cd yay && makepkg --noconfirm -si"
-            userdel -r builder
-            sed -i "/builder/d" /etc/sudoers
-            EOF
-            chmod +x archlive/airootfs/etc/calamares/scripts/install_yay.sh
-            
-            # --- netinstall.conf ---
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/netinstall.conf
-            ---
-            source: "/etc/calamares/netinstall.yaml"
-            preScript: "yay -Syu --noconfirm"
-            install:
-                - "yay -S --noconfirm"
-            EOF
+          # settings.conf
+          cat <<EOFSET > archlive/airootfs/etc/calamares/settings.conf
+          modules-load:
+            - welcome
+            - keyboard
+            - partition
+            - unpackfs
+            - shellprocess
+            - netinstall
+            - users
+            - bootloader
+            - displaymanager
+            - finished
+          branding: archlinux
+          prompt-install: false
+          -id: preserve-user-home-on-reinstall
+          EOFSET
 
-            # --- netinstall.yaml (The Big Package List) ---
-            cat <<'EOF' > archlive/airootfs/etc/calamares/netinstall.yaml
-            packages:
-                # KERNELS
-              - name: "🧠 Kernels"
-                description: "Choose an alternative Linux kernel."
-                packages: [linux-lts, linux-zen, linux-hardened]
+          # unpackfs.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
+          ---
+          unpack:
+            - source: "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs"
+              sourcefs: "squashfs"
+              destination: ""
+          EOF
 
-                # DESKTOPS & WMs
-              - name: "🖥️ Desktop Environments"
-                description: "Full-featured desktop environments. Choose one."
-                exclusive: true
-                packages:
-                  - plasma-meta: "KDE Plasma"
-                  - gnome: "GNOME"
-                  - xfce4: "XFCE"
-                  - cinnamon: "Cinnamon"
-                  - mate: "MATE"
-                  - budgie-desktop: "Budgie"
-                  - deepin: "Deepin"
-                  - lxqt: "LXQt"
-              - name: "🪟 Tiling Window Managers"
-                description: "Keyboard-driven, tiling window managers."
-                packages: [i3-wm, sway, hyprland, bspwm, qtile, awesome, dwm, xmonad]
-              - name: "💡 Display Managers"
-                description: "Graphical login managers."
-                packages: [sddm, gdm, lightdm, lxdm]
+          # shellprocess.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/shellprocess.conf
+          ---
+          scripts:
+            - script:
+                - calamares-chroot-script "/etc/calamares/scripts/install_yay.sh"
+              timeout: 600
+              comment: "Installing yay AUR helper"
+          EOF
 
-                # CORE SYSTEM & UTILITIES
-              - name: "🐚 Shells & Terminals"
-                description: "Alternative shells and terminal emulators."
-                packages: [zsh, fish, kitty, alacritty, terminator, wezterm]
-              - name: "📂 File Managers"
-                description: "Graphical and terminal-based file managers."
-                packages: [dolphin, thunar, nautilus, ranger, mc, krusader]
-              - name: "📈 System Monitoring & Tools"
-                packages: [htop, btop, conky, gparted, neofetch, fastfetch, powertop, iotop]
-              - name: "💾 Backup & Synchronization"
-                packages: [timeshift, restic, borg, rsync, syncthing]
-              - name: "🔑 Security & Privacy"
-                packages: [keepassxc, veracrypt, ufw, gufw, firewalld, torbrowser-launcher]
-              - name: "🔠 Fonts"
-                description: "Useful font packages for development and general use."
-                packages: [noto-fonts, ttf-fira-code, ttf-jetbrains-mono, ttf-hack-nerd, ttf-cascadia-code, ttf-dejavu, ttf-liberation]
+          # netinstall.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/netinstall.conf
+          ---
+          source: "/etc/calamares/netinstall.yaml"
+          preScript: "yay -Syu --noconfirm"
+          install:
+              - "yay -S --noconfirm"
+          EOF
 
-                # DEVELOPMENT
-              - name: "🛠️ Core Development Tools"
-                packages: [base-devel, git, cmake]
-              - name: "👨‍💻 Editors & IDEs"
-                packages: [neovim, vim, emacs, code, geany, kate, gedit, qtcreator, sublime-text-4]
-              - name: "📦 Virtualization & Containers"
-                packages: [docker, docker-compose, podman, qemu-full, virt-manager, virtualbox, virtualbox-guest-iso]
-              - name: "🕸️ Web Development"
-                packages: [nodejs, npm, deno]
-              - name: "🐍 Python Development"
-                packages: [python-pip, python-virtualenv, ipython]
-              - name: "⚙️ C/C++/Java/Go/Rust"
-                packages: [clang, openjdk-src, go, rustup]
-              - name: "🗃️ Database Tools"
-                packages: [postgresql, mariadb, redis, dbeaver, sqlitebrowser]
+          # netinstall.yaml
+          cat <<'EOF' > archlive/airootfs/etc/calamares/netinstall.yaml
+          packages:
+            - name: "🧠 Kernels"
+              description: "Alternative Linux kernels"
+              packages: [linux-lts, linux-zen, linux-hardened]
 
-                # APPLICATIONS
-              - name: "🌐 Web Browsers"
-                packages:
-                  - firefox
-                  - chromium
-                  - vivaldi: "Vivaldi (AUR)"
-                  - brave: "Brave Browser (AUR)"
-              - name: "✍️ Office & Productivity"
-                packages: [libreoffice-fresh, onlyoffice-desktopeditors, thunderbird, evolution, zotero, joplin-desktop, calibre]
-              - name: "🎨 Graphics & Design"
-                packages: [gimp, krita, inkscape, blender, darktable, rawtherapee, digikam, scribus, pinta, archlinux-artwork]
-              - name: "🎬 Multimedia"
-                packages: [vlc, mpv, celluloid, smplayer, obs-studio, kdenlive, shotcut, audacity, lmms, handbrake, spotify-launcher, strawberry, lollypop]
-              - name: "🎮 Gaming"
-                packages: [steam, lutris, heroic-games-launcher-bin, wine, gamemode, mangohud, bottles, retroarch, dolphin-emu, 0ad, supertuxkart, xonotic, hedgewars, extremetuxracer, warsow, classicube]
-            EOF
+            - name: "🖥️ Desktop Environments"
+              exclusive: true
+              description: "Choose one full-featured desktop"
+              packages:
+                - plasma-meta: "KDE Plasma"
+                - gnome: "GNOME"
+                - xfce4: "XFCE"
+                - cinnamon: "Cinnamon"
+                - mate: "MATE"
+                - budgie-desktop: "Budgie"
+                - deepin: "Deepin"
+                - lxqt: "LXQt"
 
-            # --- Other Calamares Modules ---
-            mkdir -p archlive/airootfs/etc/calamares/branding/archlinux
-            cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
-            componentName: archlinux
-            welcomeText: "<h2>Welcome to the Universal Arch Linux Installer.</h2><p>This installer uses <b>yay</b> to install packages from official repositories and the AUR. An internet connection is required.</p>"
-            EOF
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/bootloader.conf
-            ---
-            bootloader: "grub"
-            efi_directory: "/boot"
-            grub_install_args: ["--bootloader-id=arch"]
-            EOF
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/displaymanager.conf
-            ---
-            displaymanagers:
-              - {name: "SDDM", service: "sddm.service"}
-              - {name: "GDM", service: "gdm.service"}
-              - {name: "LightDM", service: "lightdm.service"}
-            default: "sddm"
-            EOF
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/partition.conf
-            ---
-            efiSystemPartition: "/boot"
-            efiSystemPartitionSize: 512M
-            create-swap: true
-            swap-size: 2048M
-            default-filesystem: "ext4"
-            EOF
-            cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
-            ---
-            reboot-now: true
-            EOF
-            
-            # Autostart Calamares
-            mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
-            cat <<EOF > archlive/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
-            [Service]
-            ExecStart=
-            ExecStart=-/usr/bin/agetty --autologin root --noclear %I \$TERM
-            EOF
-            cat <<EOF > archlive/airootfs/root/.xinitrc
-            #!/bin/sh
-            openbox &
-            tint2 &
-            calamares --fullscreen
-            EOF
-            chmod +x archlive/airootfs/root/.xinitrc
-            cat <<EOF > archlive/airootfs/root/.bash_profile
-            [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
-            EOF
+            - name: "🪟 Tiling WMs"
+              description: "Tiling window managers"
+              packages: [i3-wm, sway, hyprland, bspwm, qtile, awesome, dwm, xmonad]
 
-            # Main ISO profile config
-            cat <<EOF > archlive/profile.conf
-            iso_name="archlinux-universal-installer"
-            iso_label="ARCH_YAY_$(date +%Y%m)"
-            iso_publisher="KrzysTheTech"
-            iso_application="Arch Linux Universal Netinstaller"
-            iso_version="$(date +%Y.%m.%d)"
-            install_dir="arch"
-            buildmodes=('iso')
-            bootmodes=('bios.syslinux.mbr bios.syslinux.eltorito uefi-shell uefi-ia32.grub.esp uefi-x64.grub.esp')
-            airootfs_image_tool_options=('-comp' 'xz' '-b' '1M')
-            file_permissions=(["/etc/shadow"]="0:0:400" ["/root"]="0:0:750")
-            EOF
-          '
+            - name: "💡 Display Managers"
+              packages: [sddm, gdm, lightdm, lxdm]
 
-      - name: Build the ISO in a Privileged Container
+            - name: "🐚 Shells & Terminals"
+              packages: [zsh, fish, kitty, alacritty, terminator, wezterm]
+
+            - name: "📂 File Managers"
+              packages: [dolphin, thunar, nautilus, ranger, mc, krusader]
+
+            - name: "📈 System Tools"
+              packages: [htop, btop, conky, gparted, neofetch, fastfetch, powertop, iotop]
+
+            - name: "🔑 Privacy & Security"
+              packages: [keepassxc, veracrypt, ufw, gufw, firewalld, torbrowser-launcher]
+
+            - name: "🔠 Fonts"
+              packages: [noto-fonts, ttf-fira-code, ttf-jetbrains-mono, ttf-hack-nerd, ttf-cascadia-code, ttf-dejavu, ttf-liberation]
+
+            - name: "🛠️ Dev Tools"
+              packages: [base-devel, git, cmake]
+
+            - name: "👨‍💻 Editors & IDEs"
+              packages: [neovim, vim, emacs, code, geany, kate, gedit, qtcreator, sublime-text-4]
+
+            - name: "📦 Containers & VMs"
+              packages: [docker, docker-compose, podman, qemu-full, virt-manager, virtualbox, virtualbox-guest-iso]
+
+            - name: "🕸️ Web Dev"
+              packages: [nodejs, npm, deno]
+
+            - name: "🐍 Python Dev"
+              packages: [python-pip, python-virtualenv, ipython]
+
+            - name: "⚙️ Compilers"
+              packages: [clang, openjdk-src, go, rustup]
+
+            - name: "🗃️ Databases"
+              packages: [postgresql, mariadb, redis, dbeaver, sqlitebrowser]
+
+            - name: "🌐 Browsers"
+              packages:
+                - firefox
+                - chromium
+                - vivaldi: "Vivaldi (AUR)"
+                - brave: "Brave (AUR)"
+
+            - name: "✍️ Office Tools"
+              packages: [libreoffice-fresh, onlyoffice-desktopeditors, thunderbird, evolution, zotero, joplin-desktop, calibre]
+
+            - name: "🎨 Design"
+              packages: [gimp, krita, inkscape, blender, darktable, rawtherapee, digikam, scribus, pinta, archlinux-artwork]
+
+            - name: "🎬 Multimedia"
+              packages: [vlc, mpv, celluloid, smplayer, obs-studio, kdenlive, shotcut, audacity, lmms, handbrake, spotify-launcher, strawberry, lollypop]
+
+            - name: "🎮 Gaming"
+              packages: [steam, lutris, heroic-games-launcher-bin, wine, gamemode, mangohud, bottles, retroarch, dolphin-emu, 0ad, supertuxkart, xonotic, hedgewars, extremetuxracer, warsow, classicube]
+          EOF
+
+          # displaymanager.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/displaymanager.conf
+          ---
+          displaymanagers:
+            - {name: "SDDM", service: "sddm.service"}
+            - {name: "GDM", service: "gdm.service"}
+            - {name: "LightDM", service: "lightdm.service"}
+          default: "sddm"
+          EOF
+
+          # bootloader.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/bootloader.conf
+          ---
+          bootloader: "grub"
+          efi_directory: "/boot"
+          grub_install_args: ["--bootloader-id=arch"]
+          EOF
+
+          # partition.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/partition.conf
+          ---
+          efiSystemPartition: "/boot"
+          efiSystemPartitionSize: 512M
+          create-swap: true
+          swap-size: 2048M
+          default-filesystem: "ext4"
+          EOF
+
+          # finished.conf
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
+          ---
+          reboot-now: true
+          EOF
+
+          # branding.desc
+          cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
+          componentName: archlinux
+          welcomeText: "<h2>Welcome to the Universal Arch Linux Installer</h2><p>This installer uses <b>yay</b> to support official & AUR packages. Internet required.</p>"
+          EOF
+
+          # Autologin + startx + X
+          cat <<EOF > archlive/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
+          [Service]
+          ExecStart=
+          ExecStart=-/usr/bin/agetty --autologin root --noclear %I \$TERM
+          EOF
+
+          cat <<EOF > archlive/airootfs/root/.xinitrc
+          #!/bin/sh
+          openbox &
+          tint2 &
+          calamares --fullscreen
+          EOF
+          chmod +x archlive/airootfs/root/.xinitrc
+
+          cat <<EOF > archlive/airootfs/root/.bash_profile
+          [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
+          EOF
+
+          # profile.conf
+          cat <<EOF > archlive/profile.conf
+          iso_name="archlinux-universal-installer"
+          iso_label="ARCH_YAY_$(date +%Y%m)"
+          iso_publisher="KrzysTheTech"
+          iso_application="Arch Linux Universal Netinstaller"
+          iso_version="$(date +%Y.%m.%d)"
+          install_dir="arch"
+          buildmodes=('iso')
+          bootmodes=('bios.syslinux.mbr bios.syslinux.eltorito uefi-shell uefi-ia32.grub.esp uefi-x64.grub.esp')
+          airootfs_image_tool_options=('-comp' 'xz' '-b' '1M')
+          file_permissions=(["/etc/shadow"]="0:0:400" ["/root"]="0:0:750")
+          EOF
+          EOF
+
+          chmod +x docker-build.sh
+
+      - name: Run Docker Build Script
         run: |
-          docker run \
-            --rm \
-            --privileged \
-            -v "${{ github.workspace }}":/work \
-            -w /work \
-            archlinux:latest \
-            mkarchiso -v -w work -o out archlive
+          docker run --rm --privileged -v "${{ github.workspace }}":/work -w /work archlinux:latest ./docker-build.sh
+
+      - name: Build the ISO
+        run: |
+          docker run --rm --privileged -v "${{ github.workspace }}":/work -w /work archlinux:latest mkarchiso -v -w work -o out archlive
 
       - name: Set Timestamp for Artifact Name
         run: echo "TIMESTAMP=$(date +%Y.%m.%d)" >> $GITHUB_ENV
