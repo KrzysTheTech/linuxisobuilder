@@ -54,6 +54,8 @@ jobs:
         run: |
           mkdir -p config/package-lists
           cat <<EOF > config/package-lists/my.list.chroot
+          # ADD THE CORRECT DEBIAN KERNEL PACKAGE
+          linux-image-amd64
           task-gnome-desktop
           firefox
           vlc
