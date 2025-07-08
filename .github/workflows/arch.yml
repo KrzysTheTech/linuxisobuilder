@@ -15,7 +15,6 @@ jobs:
       - name: Update Pacman and Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          # Add 'go' for building the 'yay' AUR helper
           pacman -S --noconfirm --needed git base-devel archiso wget go
 
       - name: Configure Git
@@ -27,35 +26,36 @@ jobs:
         run: |
           cp -r /usr/share/archiso/configs/releng/ archlive
 
-      - name: Configure ISO Profile and Compression
+      - name: Build AUR Helper and Create Local Repo
         run: |
-          cat <<EOF > archlive/profile.conf
-          iso_name="archlinux-full"
-          iso_label="ARCH_FULL_$(date +%Y%m)"
-          iso_publisher="KrzysTheTech <krzysztofdemirkuzniak@gmail.com>"
-          iso_application="Arch Linux Full Installer"
-          iso_version="$(date +%Y.%m.%d)"
-          install_dir="arch"
-          buildmodes=('iso')
-          bootmodes=('bios.syslinux.mbr' 'bios.syslinux.eltorito'
-                     'uefi-shell' 'uefi-ia32.grub.esp' 'uefi-x64.grub.esp'
-                     'uefi-ia32.refind.esp' 'uefi-x64.refind.esp')
-          airootfs_image_tool_options=('-comp' 'xz' '-b' '1M')
-          file_permissions=(
-            ["/etc/shadow"]="0:0:400"
-            ["/root"]="0:0:750"
-            ["/root/.automated_script.sh"]="0:0:755"
-          )
-          EOF
+          # Create the repo directory, now named 'yay_repo'
+          mkdir -p /yay_repo
+          
+          # Clone and build yay
+          git clone https://aur.archlinux.org/yay.git
+          cd yay
+          chown -R nobody:nobody .
+          sudo -u nobody GOCACHE="$(pwd)/.cache" makepkg -s --noconfirm
+          
+          # Add the built package to the 'yay' repo database
+          repo-add /yay_repo/yay.db.tar.gz *.pkg.tar.zst
+          cd ..
+          rm -rf yay
 
-      - name: Configure Pacman for Testing Repos
+      - name: Configure Pacman to use Local Repo
         run: |
+          # The custom repository is now named [yay]
           cat <<EOF > archlive/pacman.conf
           [options]
           Architecture = auto
           CheckSpace
           SigLevel = Never
           ParallelDownloads = 10
+
+          [yay]
+          SigLevel = Optional TrustAll
+          Server = file:///yay_repo
+
           [core-testing]
           Include = /etc/pacman.d/mirrorlist
           [core]
@@ -78,10 +78,11 @@ jobs:
 
       - name: Define Extensive Package List (Full Installation)
         run: |
-          # This full list of packages will be included in the ISO and installed on the target system.
           cat <<EOF > archlive/packages.x86_64
           # --- BASE SYSTEM & BOOTLOADER ---
           base base-devel linux linux-firmware refind
+          # --- AUR HELPER ---
+          yay
           # --- INSTALLER & LIVE ENVIRONMENT ---
           archiso calamares fastfetch htop wget curl unzip p7zip networkmanager
           xorg-server xorg-xinit openbox tint2
@@ -127,24 +128,11 @@ jobs:
           noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-dejavu ttf-liberation
           EOF
 
-      - name: Build and Install AUR Helper (yay) into Live Environment
-        run: |
-          git clone https://aur.archlinux.org/yay.git
-          cd yay
-          chown -R nobody:nobody .
-          sudo -u nobody GOCACHE="$(pwd)/.cache" makepkg -s --noconfirm
-          # CORRECTED: Changed -noconfirm to --noconfirm
-          pacman -U --root ../archlive/airootfs --dbpath ../archlive/airootfs/var/lib/pacman --noconfirm *.pkg.tar.zst
-          cd ..
-          rm -rf yay
-
       - name: Configure Calamares for Full Installation
         run: |
           mkdir -p archlive/airootfs/etc/calamares/modules
           mkdir -p archlive/airootfs/etc/calamares/branding/archlinux
           mkdir -p archlive/airootfs/etc/calamares/scripts
-
-          # Calamares settings now use 'unpackfs' instead of 'packages'
           cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
           modules-load:
             - welcome
@@ -154,13 +142,10 @@ jobs:
             - users
             - summary
             - finished
-          
           branding: archlinux
           prompt-install: false
           -id: preserve-user-home-on-reinstall
           EOF
-          
-          # Branding for the full installer
           cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
           componentName: archlinux
           welcomeStyle: "true"
@@ -174,8 +159,6 @@ jobs:
           shortName: Arch Linux
           productLogo: "/usr/share/pixmaps/archlinux-logo.svg"
           EOF
-          
-          # Configuration for the unpackfs module
           cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
           ---
           unpack:
@@ -183,8 +166,6 @@ jobs:
                 sourcefs: "squashfs"
                 destination: ""
           EOF
-
-          # Partition module configuration remains the same
           cat <<EOF > archlive/airootfs/etc/calamares/modules/partition.conf
           ---
           efiSystemPartition: "/boot"
@@ -213,8 +194,9 @@ jobs:
           [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
           EOF
 
-      - name: Configure Post-Installation
+      - name: Configure Post-Installation and Profile
         run: |
+          # Post-install script for bootloader
           cat <<EOF > archlive/airootfs/usr/local/bin/install-refind
           #!/bin/bash
           refind-install
@@ -231,6 +213,24 @@ jobs:
           post-install:
               - command: "/etc/calamares/scripts/post-install"
           EOF
+          # ISO Profile configuration
+          cat <<EOF > archlive/profile.conf
+          iso_name="archlinux-full"
+          iso_label="ARCH_FULL_$(date +%Y%m)"
+          iso_publisher="KrzysTheTech <krzysztofdemirkuzniak@gmail.com>"
+          iso_application="Arch Linux Full Installer"
+          iso_version="$(date +%Y.%m.%d)"
+          install_dir="arch"
+          buildmodes=('iso')
+          bootmodes=('bios.syslinux.mbr' 'bios.syslinux.eltorito'
+                     'uefi-shell' 'uefi-ia32.grub.esp' 'uefi-x64.grub.esp'
+                     'uefi-ia32.refind.esp' 'uefi-x64.refind.esp')
+          airootfs_image_tool_options=('-comp' 'xz' '-b' '1M')
+          file_permissions=(
+            ["/etc/shadow"]="0:0:400"
+            ["/root"]="0:0:750"
+          )
+          EOF
 
       - name: Build the ISO
         id: build_iso
@@ -244,6 +244,5 @@ jobs:
       - name: Upload ISO as Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Updated filename for the full ISO
           name: archlinux-full-${{ env.TIMESTAMP }}-x86_64.iso
           path: out/*.iso
