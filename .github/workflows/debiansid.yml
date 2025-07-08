@@ -40,21 +40,14 @@ jobs:
 
       - name: Prepare APT Configuration
         run: |
-          # Create directories for APT sources and preferences
           mkdir -p config/includes.chroot/etc/apt/sources.list.d
           mkdir -p config/includes.chroot/etc/apt/preferences.d
-
-          # Manually create the primary sources.list file
           cat <<EOF > config/includes.chroot/etc/apt/sources.list
           deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
           EOF
-
-          # Manually create the experimental sources file
           cat <<EOF > config/includes.chroot/etc/apt/sources.list.d/experimental.list
           deb http://deb.debian.org/debian experimental main contrib non-free non-free-firmware
           EOF
-
-          # Configure APT pinning to prioritize Sid, but force kernel from Experimental
           cat <<EOF > config/includes.chroot/etc/apt/preferences.d/experimental.pref
           Package: *
           Pin: release a=experimental
@@ -94,7 +87,6 @@ jobs:
 
       - name: Create live-build config
         run: |
-          # The --archive-areas flag is removed because we provide the sources.list manually.
           lb config noauto \
             --mode debian \
             --architecture amd64 \
@@ -109,13 +101,13 @@ jobs:
             --iso-publisher "GitHub Actions" \
             --iso-volume "Debian Sid Installer" \
             --memtest none \
-            --cache true
+            --cache true \
+            --apt-options "-oAcquire::GzipIndexes=false"
 
       - name: Create package list for installed system
         run: |
           mkdir -p config/package-lists
           cat <<EOF > config/package-lists/my.list.chroot
-          # This list defines packages that will be on the final INSTALLED system
           linux-image-amd64
           task-gnome-desktop
           nala
