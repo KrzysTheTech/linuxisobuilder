@@ -1,4 +1,4 @@
-name: Build Debian Sid GNOME Installer (amd64)
+name: Build Debian Sid GNOME Installer (amd64-experimental)
 
 on:
   push:
@@ -15,6 +15,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # THIS STEP CONFIGURES GIT FOR THE WORKFLOW RUNNER
+      - name: Configure Git
+        run: |
+          git config --global user.name "KrzysTheTech"
+          git config --global user.email "krzysztofdemirkuzniak@gmail.com"
+
       - name: Maximize Build Space
         run: |
           echo "Freeing up disk space..."
@@ -26,12 +32,33 @@ jobs:
         uses: actions/cache@v4
         with:
           path: cache
-          key: ${{ runner.os }}-live-build-amd64-${{ hashFiles('config/package-lists/my.list.chroot') }}
+          key: ${{ runner.os }}-live-build-amd64-exp-${{ hashFiles('config/package-lists/my.list.chroot', 'config/archives/experimental.list.chroot') }}
           restore-keys: |
-            ${{ runner.os }}-live-build-amd64-
+            ${{ runner.os }}-live-build-amd64-exp-
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y live-build debootstrap
+
+      - name: Create Experimental Repo and APT Pinning Config
+        run: |
+          mkdir -p config/archives config/includes.chroot/etc/apt/preferences.d
+          echo "deb http://deb.debian.org/debian/ experimental main" > config/archives/experimental.list.chroot
+          cat <<EOF > config/includes.chroot/etc/apt/preferences.d/experimental.pref
+          Package: *
+          Pin: release a=experimental
+          Pin-Priority: 1
+
+          Package: linux-image-amd64 linux-headers-amd64
+          Pin: release a=experimental
+          Pin-Priority: 1001
+          EOF
+
+      - name: Create Custom Installer Message
+        run: |
+          mkdir -p config/preseed
+          cat <<EOF > config/preseed/custom-warning.cfg
+          d-i debian-installer/startup_note string WARNING: This is a highly unstable custom Debian Sid build. It includes software from the main Sid repositories (Firefox 140.0.1-1, VLC 3.0.21-10) and the latest kernel from the Experimental repository (6.15.5-1~exp1). This system is for testing and development purposes only. Use with extreme caution.
+          EOF
 
       - name: Create live-build config
         run: |
@@ -43,10 +70,10 @@ jobs:
             --mirror-chroot "http://deb.debian.org/debian/" \
             --debian-installer true \
             --debian-installer-gui true \
-            --iso-application "Debian Sid GNOME Installer" \
+            --iso-application "Debian Sid GNOME Installer (Experimental Kernel)" \
             --iso-preparer "Built by GitHub Actions" \
             --iso-publisher "GitHub Actions" \
-            --iso-volume "Debian Sid GNOME" \
+            --iso-volume "Debian Sid Exp" \
             --memtest none \
             --cache true
 
@@ -54,13 +81,13 @@ jobs:
         run: |
           mkdir -p config/package-lists
           cat <<EOF > config/package-lists/my.list.chroot
-          # ADD THE CORRECT DEBIAN KERNEL PACKAGE
           linux-image-amd64
           task-gnome-desktop
           firefox
           vlc
           ffmpeg
           build-essential
+          crossbuild-essential-amd64
           kdenlive
           EOF
 
