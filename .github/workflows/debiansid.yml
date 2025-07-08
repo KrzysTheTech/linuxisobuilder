@@ -94,11 +94,11 @@ jobs:
 
       - name: Create live-build config
         run: |
+          # The --archive-areas flag is removed because we provide the sources.list manually.
           lb config noauto \
             --mode debian \
             --architecture amd64 \
             --distribution sid \
-            # --archive-areas flag is removed, as we now provide the sources.list manually
             --mirror-bootstrap "http://deb.debian.org/debian" \
             --mirror-chroot "http://deb.debian.org/debian" \
             --mirror-binary "http://deb.debian.org/debian" \
