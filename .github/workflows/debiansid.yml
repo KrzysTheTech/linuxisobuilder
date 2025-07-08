@@ -81,6 +81,7 @@ jobs:
       - name: Create live-build config
         run: |
           lb config noauto \
+            --mode debian \
             --architecture amd64 \
             --distribution sid \
             --archive-areas "main contrib non-free non-free-firmware" \
@@ -93,7 +94,6 @@ jobs:
             --iso-volume "Debian Sid Installer" \
             --memtest none \
             --cache true \
-            # THIS IS THE NEW FLAG to force the installer kernel
             --debian-installer-kernel-packages "linux-image-amd64"
 
       - name: Create package list for installed system
