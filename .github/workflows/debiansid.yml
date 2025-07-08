@@ -28,6 +28,8 @@ jobs:
             --architecture ${{ matrix.arch }} \
             --distribution sid \
             --archive-areas "main contrib non-free non-free-firmware" \
+            --mirror-bootstrap "http://deb.debian.org/debian/" \
+            --mirror-chroot "http://deb.debian.org/debian/" \
             --debian-installer true \
             --debian-installer-distribution sid \
             --debian-installer-gui true \
@@ -55,8 +57,9 @@ jobs:
 
       - name: Rename ISO
         run: |
-          ISO_DATE=$(date +%Y%m%d)
-          mv debian-sid-${{ matrix.arch }}-gnome.iso debian-sid-gnome-installer-${ISO_DATE}-${{ matrix.arch }}.iso
+          ISO_NAME="debian-live-$(date +%Y%m%d)-${{ matrix.arch }}-gnome.iso"
+          mv live-image-${{ matrix.arch }}.hybrid.iso "debian-sid-gnome-installer-$(date +%Y%m%d)-${{ matrix.arch }}.iso"
+
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4
