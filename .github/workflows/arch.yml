@@ -11,17 +11,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Prepare Build Environment
-        run: |
-          docker run --rm --entrypoint /bin/sh -v "${{ github.workspace }}":/work archlinux:latest -c "pacman -Syu --noconfirm && pacman -S --noconfirm --needed git base-devel archiso wget"
-
       - name: Create ISO Profile and Configuration
         run: |
           docker run --rm --entrypoint /bin/sh -v "${{ github.workspace }}":/work -w /work archlinux:latest -c '
-            # CORRECTED: This is the definitive, current path for the archiso profile template.
+            # 1. Install dependencies and copy the profile template
+            pacman -Syu --noconfirm && pacman -S --noconfirm --needed git base-devel archiso wget
             cp -r /usr/share/archiso/profiles/releng/ archlive
 
-            # Define minimal package list for the live ISO
+            # 2. Define minimal package list for the live ISO
             cat <<EOF > archlive/packages.x86_64
             base linux linux-firmware sudo
             grub mtools syslinux edk2-shell
@@ -30,7 +27,7 @@ jobs:
             wget git fastfetch
             EOF
 
-            # Create all necessary Calamares config files
+            # 3. Create all necessary Calamares config files
             mkdir -p archlive/airootfs/etc/calamares/modules
             mkdir -p archlive/airootfs/etc/calamares/scripts
 
@@ -111,60 +108,63 @@ jobs:
                   - cinnamon: "Cinnamon"
                   - mate: "MATE"
                   - budgie-desktop: "Budgie"
+                  - deepin: "Deepin"
+                  - lxqt: "LXQt"
               - name: "🪟 Tiling Window Managers"
                 description: "Keyboard-driven, tiling window managers."
-                packages: [i3-wm, sway, hyprland, bspwm, qtile, awesome, dwm]
+                packages: [i3-wm, sway, hyprland, bspwm, qtile, awesome, dwm, xmonad]
               - name: "💡 Display Managers"
                 description: "Graphical login managers."
-                packages: [sddm, gdm, lightdm]
+                packages: [sddm, gdm, lightdm, lxdm]
 
                 # CORE SYSTEM & UTILITIES
               - name: "🐚 Shells & Terminals"
                 description: "Alternative shells and terminal emulators."
-                packages: [zsh, fish, kitty, alacritty, terminator]
+                packages: [zsh, fish, kitty, alacritty, terminator, wezterm]
               - name: "📂 File Managers"
                 description: "Graphical and terminal-based file managers."
-                packages: [dolphin, thunar, nautilus, ranger, mc]
+                packages: [dolphin, thunar, nautilus, ranger, mc, krusader]
               - name: "📈 System Monitoring & Tools"
-                packages: [htop, btop, conky, gparted, neofetch, fastfetch]
+                packages: [htop, btop, conky, gparted, neofetch, fastfetch, powertop, iotop]
               - name: "💾 Backup & Synchronization"
-                packages: [timeshift, restic, borg, rsync]
+                packages: [timeshift, restic, borg, rsync, syncthing]
               - name: "🔑 Security & Privacy"
-                packages: [keepassxc, veracrypt, ufw, gufw, torbrowser-launcher]
+                packages: [keepassxc, veracrypt, ufw, gufw, firewalld, torbrowser-launcher]
               - name: "🔠 Fonts"
                 description: "Useful font packages for development and general use."
-                packages: [noto-fonts, ttf-fira-code, ttf-jetbrains-mono, ttf-cascadia-code, ttf-dejavu, ttf-liberation]
+                packages: [noto-fonts, ttf-fira-code, ttf-jetbrains-mono, ttf-hack-nerd, ttf-cascadia-code, ttf-dejavu, ttf-liberation]
 
                 # DEVELOPMENT
               - name: "🛠️ Core Development Tools"
                 packages: [base-devel, git, cmake]
               - name: "👨‍💻 Editors & IDEs"
-                packages: [neovim, vim, emacs, code, geany, kate, gedit]
-              - name: "📦 Containerization & Virtualization"
-                packages: [docker, docker-compose, podman, qemu-full, virt-manager]
+                packages: [neovim, vim, emacs, code, geany, kate, gedit, qtcreator, sublime-text-4]
+              - name: "📦 Virtualization & Containers"
+                packages: [docker, docker-compose, podman, qemu-full, virt-manager, virtualbox, virtualbox-guest-iso]
               - name: "🕸️ Web Development"
                 packages: [nodejs, npm, deno]
               - name: "🐍 Python Development"
-                packages: [python-pip, python-virtualenv]
+                packages: [python-pip, python-virtualenv, ipython]
               - name: "⚙️ C/C++/Java/Go/Rust"
                 packages: [clang, openjdk-src, go, rustup]
               - name: "🗃️ Database Tools"
-                packages: [postgresql, mariadb, redis, dbeaver]
+                packages: [postgresql, mariadb, redis, dbeaver, sqlitebrowser]
 
                 # APPLICATIONS
               - name: "🌐 Web Browsers"
                 packages:
                   - firefox
                   - chromium
+                  - vivaldi: "Vivaldi (AUR)"
                   - brave: "Brave Browser (AUR)"
               - name: "✍️ Office & Productivity"
-                packages: [libreoffice-fresh, onlyoffice-desktopeditors, thunderbird, evolution, zotero, joplin-desktop]
+                packages: [libreoffice-fresh, onlyoffice-desktopeditors, thunderbird, evolution, zotero, joplin-desktop, calibre]
               - name: "🎨 Graphics & Design"
-                packages: [gimp, krita, inkscape, blender, darktable, scribus, archlinux-artwork]
+                packages: [gimp, krita, inkscape, blender, darktable, rawtherapee, digikam, scribus, pinta, archlinux-artwork]
               - name: "🎬 Multimedia"
-                packages: [vlc, mpv, obs-studio, kdenlive, shotcut, audacity, lmms, handbrake, spotify-launcher, strawberry]
+                packages: [vlc, mpv, celluloid, smplayer, obs-studio, kdenlive, shotcut, audacity, lmms, handbrake, spotify-launcher, strawberry, lollypop]
               - name: "🎮 Gaming"
-                packages: [steam, lutris, heroic-games-launcher-bin, wine, gamemode, mangohud, bottles, retroarch, dolphin-emu, 0ad, supertuxkart, xonotic, classicube]
+                packages: [steam, lutris, heroic-games-launcher-bin, wine, gamemode, mangohud, bottles, retroarch, dolphin-emu, 0ad, supertuxkart, xonotic, hedgewars, extremetuxracer, warsow, classicube]
             EOF
 
             # --- Other Calamares Modules ---
@@ -251,4 +251,3 @@ jobs:
         with:
           name: archlinux-universal-installer-${{ env.TIMESTAMP }}-x86_64.iso
           path: out/*.iso
-          
