@@ -1,4 +1,4 @@
-name: Build Debian Sid GNOME Installer
+name: Build Debian Sid GNOME Installer (amd64)
 
 on:
   push:
@@ -9,11 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # ADD THIS LINE TO SET THE TIMEOUT TO THE 6-HOUR MAXIMUM
-    timeout-minutes: 360
-    strategy:
-      matrix:
-        arch: [amd64, arm64, riscv64]
+    timeout-minutes: 360 # 6-hour timeout
 
     steps:
       - name: Checkout repository
@@ -22,55 +18,60 @@ jobs:
       - name: Maximize Build Space
         run: |
           echo "Freeing up disk space..."
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet /opt/hostedtoolcache/CodeQL /usr/local/lib/android
           echo "Disk space after cleanup:"
           df -h
 
+      - name: Cache live-build contents
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: ${{ runner.os }}-live-build-amd64-${{ hashFiles('config/package-lists/my.list.chroot') }}
+          restore-keys: |
+            ${{ runner.os }}-live-build-amd64-
+
       - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y live-build debootstrap
+        run: sudo apt-get update && sudo apt-get install -y live-build debootstrap
 
       - name: Create live-build config
         run: |
           lb config noauto \
-            --architecture ${{ matrix.arch }} \
+            --architecture amd64 \
             --distribution sid \
             --archive-areas "main contrib non-free non-free-firmware" \
             --mirror-bootstrap "http://deb.debian.org/debian/" \
             --mirror-chroot "http://deb.debian.org/debian/" \
             --debian-installer true \
-            --debian-installer-distribution sid \
             --debian-installer-gui true \
             --iso-application "Debian Sid GNOME Installer" \
             --iso-preparer "Built by GitHub Actions" \
             --iso-publisher "GitHub Actions" \
             --iso-volume "Debian Sid GNOME" \
-            --memtest none
+            --memtest none \
+            --cache true
 
       - name: Create package list
         run: |
-          # Consider removing large packages like kdenlive for the riscv64 build to save time
-          echo "task-gnome-desktop" > config/package-lists/gnome.list.chroot
-          echo "firefox" >> config/package-lists/gnome.list.chroot
-          echo "vlc" >> config/package-lists/gnome.list.chroot
-          echo "ffmpeg" >> config/package-lists/gnome.list.chroot
-          echo "build-essential" >> config/package-lists/gnome.list.chroot
-          echo "kdenlive" >> config/package-lists/gnome.list.chroot
+          mkdir -p config/package-lists
+          cat <<EOF > config/package-lists/my.list.chroot
+          task-gnome-desktop
+          firefox
+          vlc
+          ffmpeg
+          build-essential
+          kdenlive
+          EOF
 
       - name: Build the ISO
-        run: |
-          sudo lb build
+        run: sudo lb build
 
       - name: Rename ISO
         run: |
-          ISO_NAME="debian-live-$(date +%Y%m%d)-${{ matrix.arch }}-gnome.iso"
-          mv live-image-${{ matrix.arch }}.hybrid.iso "debian-sid-gnome-installer-$(date +%Y%m%d)-${{ matrix.arch }}.iso"
+          ISO_DATE=$(date +%Y%m%d)
+          mv live-image-amd64.hybrid.iso "debian-sid-gnome-installer-${ISO_DATE}-amd64.iso"
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
-          name: debian-sid-gnome-installer-${{ matrix.arch }}
-          path: debian-sid-gnome-installer-*-${{ matrix.arch }}.iso
+          name: debian-sid-gnome-installer-amd64
+          path: debian-sid-gnome-installer-*-amd64.iso
