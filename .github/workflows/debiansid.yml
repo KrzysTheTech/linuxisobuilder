@@ -60,10 +60,10 @@ jobs:
           mkdir -p config/includes.chroot/etc/skel
           mkdir -p config/hooks/chroot
 
-          # Download wallpaper with the new name
-          wget -O config/includes.chroot/usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg "https://my.nintendo.com/rewards/5bfc31d7f04a786a/media/e96126606b6dc6f2"
+          # Download wallpaper from the new URL
+          wget -O config/includes.chroot/usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.nintendo.com%2Feu%2Fmedia%2Fimages%2Fassets%2Fnintendo_switch_2_games%2Fmariokartworld%2F2x1_NSwitch2_MarioKartWorld_image1600w.jpg&f=1&ipt=f182cce6fcc98c604ce81f8fb7563d107057922db6dfe730d25bfe8042c89c03"
 
-          # Create GSettings override for the wallpaper with the new filename
+          # Create GSettings override for the wallpaper
           cat <<EOF > config/includes.chroot/usr/share/glib-2.0/schemas/99_custom_wallpaper.gschema.override
           [org.gnome.desktop.background]
           picture-uri='file:///usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg'
