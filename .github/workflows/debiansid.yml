@@ -1,0 +1,65 @@
+name: Build Debian Sid GNOME Installer
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64, riscv64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y live-build debootstrap
+
+      - name: Create live-build config
+        run: |
+          lb config noauto \
+            --architecture ${{ matrix.arch }} \
+            --distribution sid \
+            --archive-areas "main contrib non-free non-free-firmware" \
+            --debian-installer true \
+            --debian-installer-distribution sid \
+            --debian-installer-gui true \
+            --iso-application "Debian Sid GNOME Installer" \
+            --iso-preparer "Built by GitHub Actions" \
+            --iso-publisher "GitHub Actions" \
+            --iso-volume "Debian Sid GNOME" \
+            --memtest none
+
+      - name: Create package list
+        run: |
+          echo "task-gnome-desktop" > config/package-lists/gnome.list.chroot
+          echo "firefox" >> config/package-lists/gnome.list.chroot
+          echo "vlc" >> config/package-lists/gnome.list.chroot
+          echo "ffmpeg" >> config/package-lists/gnome.list.chroot
+          echo "build-essential" >> config/package-lists/gnome.list.chroot
+          echo "crossbuild-essential-*" >> config/package-lists/gnome.list.chroot
+          echo "kdenlive" >> config/package-lists/gnome.list.chroot
+          echo "task-kde-desktop" >> config/package-lists/gnome.list.chroot
+          echo "task-xfce-desktop" >> config/package-lists/gnome.list.chroot
+
+      - name: Build the ISO
+        run: |
+          sudo lb build
+
+      - name: Rename ISO
+        run: |
+          ISO_DATE=$(date +%Y%m%d)
+          mv debian-sid-${{ matrix.arch }}-gnome.iso debian-sid-gnome-installer-${ISO_DATE}-${{ matrix.arch }}.iso
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-sid-gnome-installer-${{ matrix.arch }}
+          path: debian-sid-gnome-installer-*-${{ matrix.arch }}.iso
