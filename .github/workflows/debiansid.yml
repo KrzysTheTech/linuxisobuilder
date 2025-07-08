@@ -86,6 +86,8 @@ jobs:
             --distribution sid \
             --archive-areas "main contrib non-free non-free-firmware" \
             --mirror-bootstrap "http://deb.debian.org/debian/" \
+            --mirror-chroot "http://deb.debian.org/debian/" \
+            --mirror-binary "http://deb.debian.org/debian/" \
             --debian-installer-distribution sid \
             --binary-images iso-hybrid \
             --iso-application "Debian Sid GNOME Installer (Experimental Kernel)" \
@@ -123,4 +125,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debian-sid-gnome-installer-amd64
-          path: debian-sid-gnome-installer-*-amd64.iso
+          path: debian-sid-gnone-installer-*-amd64.iso
