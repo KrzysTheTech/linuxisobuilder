@@ -1,4 +1,4 @@
-name: Build Debian Sid GNOME Installer (amd64-experimental)
+name: Build Debian Sid Installer (amd64-experimental)
 
 on:
   push:
@@ -15,7 +15,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # THIS STEP CONFIGURES GIT FOR THE WORKFLOW RUNNER
       - name: Configure Git
         run: |
           git config --global user.name "KrzysTheTech"
@@ -28,13 +27,13 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Cache live-build contents
+      - name: Cache build contents
         uses: actions/cache@v4
         with:
           path: cache
-          key: ${{ runner.os }}-live-build-amd64-exp-${{ hashFiles('config/package-lists/my.list.chroot', 'config/archives/experimental.list.chroot') }}
+          key: ${{ runner.os }}-installer-amd64-exp-${{ hashFiles('config/package-lists/my.list.chroot', 'config/archives/experimental.list.chroot') }}
           restore-keys: |
-            ${{ runner.os }}-live-build-amd64-exp-
+            ${{ runner.os }}-installer-amd64-exp-
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y live-build debootstrap
@@ -53,6 +52,34 @@ jobs:
           Pin-Priority: 1001
           EOF
 
+      - name: Prepare System Customizations
+        run: |
+          # Create directories for wallpaper, gsettings, user skeleton, and hooks
+          mkdir -p config/includes.chroot/usr/share/backgrounds/custom
+          mkdir -p config/includes.chroot/usr/share/glib-2.0/schemas
+          mkdir -p config/includes.chroot/etc/skel
+          mkdir -p config/hooks/chroot
+
+          # Download wallpaper with the new name
+          wget -O config/includes.chroot/usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg "https://my.nintendo.com/rewards/5bfc31d7f04a786a/media/e96126606b6dc6f2"
+
+          # Create GSettings override for the wallpaper with the new filename
+          cat <<EOF > config/includes.chroot/usr/share/glib-2.0/schemas/99_custom_wallpaper.gschema.override
+          [org.gnome.desktop.background]
+          picture-uri='file:///usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg'
+          picture-uri-dark='file:///usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg'
+          EOF
+
+          # Create hook to compile the new GSettings schema
+          cat <<EOF > config/hooks/chroot/99-compile-schemas.hook.chroot
+          #!/bin/sh
+          glib-compile-schemas /usr/share/glib-2.0/schemas/
+          EOF
+          chmod +x config/hooks/chroot/99-compile-schemas.hook.chroot
+
+          # Add nala alias to the default .bashrc for new users
+          echo "alias apt='nala'" >> config/includes.chroot/etc/skel/.bashrc
+
       - name: Create Custom Installer Message
         run: |
           mkdir -p config/preseed
@@ -67,22 +94,23 @@ jobs:
             --distribution sid \
             --archive-areas "main contrib non-free non-free-firmware" \
             --mirror-bootstrap "http://deb.debian.org/debian/" \
-            --mirror-chroot "http://deb.debian.org/debian/" \
-            --debian-installer true \
-            --debian-installer-gui true \
+            --debian-installer-distribution sid \
+            --binary-images iso-hybrid \
             --iso-application "Debian Sid GNOME Installer (Experimental Kernel)" \
             --iso-preparer "Built by GitHub Actions" \
             --iso-publisher "GitHub Actions" \
-            --iso-volume "Debian Sid Exp" \
+            --iso-volume "Debian Sid Installer" \
             --memtest none \
             --cache true
 
-      - name: Create package list
+      - name: Create package list for installed system
         run: |
           mkdir -p config/package-lists
           cat <<EOF > config/package-lists/my.list.chroot
+          # This list defines packages that will be on the final INSTALLED system
           linux-image-amd64
           task-gnome-desktop
+          nala
           firefox
           vlc
           ffmpeg
@@ -97,7 +125,7 @@ jobs:
       - name: Rename ISO
         run: |
           ISO_DATE=$(date +%Y%m%d)
-          mv live-image-amd64.hybrid.iso "debian-sid-gnome-installer-${ISO_DATE}-amd64.iso"
+          mv debian-installer-amd64.iso "debian-sid-gnome-installer-${ISO_DATE}-amd64.iso"
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4
