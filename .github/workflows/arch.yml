@@ -19,15 +19,18 @@ jobs:
 
           pacman -Syu --noconfirm git base-devel archiso wget
 
-          # Copy official releng profile
+          # Copy releng base profile
           cp -r /usr/share/archiso/profiles/releng/ archlive
 
-          # Create required dirs
-          mkdir -p archlive/airootfs/etc/calamares/{modules,scripts,branding/archlinux}
-          mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
-          mkdir -p archlive/airootfs/root
+          # Create necessary directories before any file writes
+          mkdir -p \
+            archlive/airootfs/etc/calamares/modules \
+            archlive/airootfs/etc/calamares/scripts \
+            archlive/airootfs/etc/calamares/branding/archlinux \
+            archlive/airootfs/etc/systemd/system/getty@tty1.service.d \
+            archlive/airootfs/root
 
-          # Minimal packages
+          # Base ISO packages
           cat <<EOPKG > archlive/packages.x86_64
           base linux linux-firmware sudo
           grub mtools syslinux edk2-shell
@@ -36,7 +39,7 @@ jobs:
           wget git fastfetch
           EOPKG
 
-          # yay install script
+          # yay install script (AUR helper)
           cat <<'EOSH' > archlive/airootfs/etc/calamares/scripts/install_yay.sh
           #!/bin/bash
           pacman -S --noconfirm --needed git base-devel
@@ -48,7 +51,7 @@ jobs:
           EOSH
           chmod +x archlive/airootfs/etc/calamares/scripts/install_yay.sh
 
-          # Calamares configs
+          # Calamares settings
           cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
           modules-load:
             - welcome
@@ -91,7 +94,7 @@ jobs:
             - "yay -S --noconfirm"
           EOF
 
-          # Netinstall group selection with yay, kdenlive, ollama, and games
+          # Netinstall groups (with yay, ollama, kdenlive, games)
           cat <<'EOF' > archlive/airootfs/etc/calamares/netinstall.yaml
           packages:
             - name: "🎥 Video Editing"
@@ -162,10 +165,10 @@ jobs:
 
           cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
           componentName: archlinux
-          welcomeText: "<h2>Welcome to the Universal Arch Linux Installer</h2><p>This installer uses <b>yay</b> for AUR support, and includes AI, dev, and game tools.</p>"
+          welcomeText: "<h2>Welcome to the Universal Arch Linux Installer</h2><p>This ISO includes yay, kdenlive, games, and more — install what you want!</p>"
           EOF
 
-          # Auto-start Calamares on boot
+          # Autostart Calamares on boot
           cat <<EOF > archlive/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
           [Service]
           ExecStart=
@@ -184,7 +187,7 @@ jobs:
           [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
           EOF
 
-          # ISO config
+          # ISO Profile Config
           cat <<EOF > archlive/profile.conf
           iso_name="archlinux-universal-installer"
           iso_label="ARCH_YAY_$(date +%Y%m)"
