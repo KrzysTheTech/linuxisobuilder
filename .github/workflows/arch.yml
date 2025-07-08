@@ -35,7 +35,6 @@ jobs:
             mkdir -p archlive/airootfs/etc/calamares/scripts
 
             # --- settings.conf ---
-            # This now uses unpackfs (for base), shellprocess (for yay), and netinstall (for everything else)
             cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
             modules-load:
               - welcome
@@ -54,7 +53,6 @@ jobs:
             EOF
 
             # --- unpackfs.conf ---
-            # Installs the bare minimum system from the live ISO
             cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
             ---
             unpack:
@@ -63,8 +61,7 @@ jobs:
                 destination: ""
             EOF
 
-            # --- shellprocess.conf ---
-            # Defines the job to install yay onto the new system
+            # --- shellprocess.conf (for installing yay) ---
             cat <<EOF > archlive/airootfs/etc/calamares/modules/shellprocess.conf
             ---
             scripts:
@@ -75,7 +72,6 @@ jobs:
             EOF
 
             # --- install_yay.sh Script ---
-            # This script is executed in the chroot to build and install yay
             cat <<'"EOF"' > archlive/airootfs/etc/calamares/scripts/install_yay.sh
             #!/bin/bash
             pacman -S --noconfirm --needed git base-devel
@@ -88,7 +84,6 @@ jobs:
             chmod +x archlive/airootfs/etc/calamares/scripts/install_yay.sh
             
             # --- netinstall.conf ---
-            # Configures the netinstall module to use our new YAML file and yay
             cat <<EOF > archlive/airootfs/etc/calamares/modules/netinstall.conf
             ---
             source: "/etc/calamares/netinstall.yaml"
@@ -97,57 +92,79 @@ jobs:
                 - "yay -S --noconfirm"
             EOF
 
-            # --- netinstall.yaml (The Big Package List) ---
-            # This defines all the groups and choices the user will see.
+            # --- netinstall.yaml (Massively Expanded Package List) ---
             cat <<'EOF' > archlive/airootfs/etc/calamares/netinstall.yaml
             packages:
+                # KERNELS
+              - name: "🧠 Kernels"
+                description: "Choose an alternative Linux kernel."
+                packages: [linux-lts, linux-zen, linux-hardened]
+
+                # DESKTOPS & WMs
               - name: "🖥️ Desktop Environments"
-                description: "Full-featured desktop environments."
-                selected: true
+                description: "Full-featured desktop environments. Choose one."
+                exclusive: true
                 packages:
                   - plasma-meta: "KDE Plasma"
                   - gnome: "GNOME"
                   - xfce4: "XFCE"
                   - cinnamon: "Cinnamon"
-              - name: "🪟 Window Managers"
-                description: "Lightweight and tiling window managers."
-                packages: [i3-wm, sway, hyprland, bspwm, awesome]
+                  - mate: "MATE"
+                  - budgie-desktop: "Budgie"
+              - name: "🪟 Tiling Window Managers"
+                description: "Keyboard-driven, tiling window managers."
+                packages: [i3-wm, sway, hyprland, bspwm, qtile, awesome, dwm]
               - name: "💡 Display Managers"
                 description: "Graphical login managers."
                 packages: [sddm, gdm, lightdm]
-              - name: "🧠 Kernels"
-                packages: [linux-lts, linux-zen]
-              - name: "🐚 Shells"
-                packages: [zsh, fish]
+
+                # CORE SYSTEM & UTILITIES
+              - name: "🐚 Shells & Terminals"
+                description: "Alternative shells and terminal emulators."
+                packages: [zsh, fish, kitty, alacritty, terminator]
+              - name: "📂 File Managers"
+                description: "Graphical and terminal-based file managers."
+                packages: [dolphin, thunar, nautilus, ranger, mc]
+              - name: "📈 System Monitoring & Tools"
+                packages: [htop, btop, conky, gparted, neofetch, fastfetch]
+              - name: "💾 Backup & Synchronization"
+                packages: [timeshift, restic, borg, rsync]
+              - name: "🔑 Security & Privacy"
+                packages: [keepassxc, veracrypt, ufw, gufw, torbrowser-launcher]
+              - name: "🔠 Fonts"
+                description: "Useful font packages for development and general use."
+                packages: [noto-fonts, ttf-fira-code, ttf-jetbrains-mono, ttf-cascadia-code, ttf-dejavu, ttf-liberation]
+
+                # DEVELOPMENT
+              - name: "🛠️ Core Development Tools"
+                packages: [base-devel, git, cmake]
+              - name: "👨‍💻 Editors & IDEs"
+                packages: [neovim, vim, emacs, code, geany, kate, gedit]
+              - name: "📦 Containerization & Virtualization"
+                packages: [docker, docker-compose, podman, qemu-full, virt-manager]
+              - name: "🕸️ Web Development"
+                packages: [nodejs, npm, deno]
+              - name: "🐍 Python Development"
+                packages: [python-pip, python-virtualenv]
+              - name: "⚙️ C/C++/Java/Go/Rust"
+                packages: [clang, openjdk-src, go, rustup]
+              - name: "🗃️ Database Tools"
+                packages: [postgresql, mariadb, redis, dbeaver]
+
+                # APPLICATIONS
               - name: "🌐 Web Browsers"
                 packages:
                   - firefox
                   - chromium
                   - brave: "Brave Browser (AUR)"
-              - name: "🛠️ Development"
-                packages: [neovim, code, git, docker, podman, python, nodejs, npm, rust, go]
+              - name: "✍️ Office & Productivity"
+                packages: [libreoffice-fresh, onlyoffice-desktopeditors, thunderbird, evolution, zotero, joplin-desktop]
               - name: "🎨 Graphics & Design"
-                packages:
-                  - gimp
-                  - krita
-                  - inkscape
-                  - blender
-                  - archlinux-artwork: "Arch Linux Artwork (AUR)"
+                packages: [gimp, krita, inkscape, blender, darktable, scribus, archlinux-artwork]
               - name: "🎬 Multimedia"
-                packages: [vlc, mpv, obs-studio, kdenlive, audacity]
-              - name: "✍️ Office"
-                packages: [libreoffice-fresh, onlyoffice-desktopeditors]
+                packages: [vlc, mpv, obs-studio, kdenlive, shotcut, audacity, lmms, handbrake, spotify-launcher, strawberry]
               - name: "🎮 Gaming"
-                packages:
-                  - steam
-                  - lutris
-                  - wine
-                  - gamemode
-                  - 0ad
-                  - supertuxkart
-                  - classicube: "ClassiCube (AUR)"
-              - name: "⚙️ Utilities"
-                packages: [gparted, timeshift, keepassxc, qbittorrent, btop]
+                packages: [steam, lutris, heroic-games-launcher-bin, wine, gamemode, mangohud, bottles, retroarch, dolphin-emu, 0ad, supertuxkart, xonotic, classicube]
             EOF
 
             # --- Other Calamares Modules ---
@@ -217,12 +234,13 @@ jobs:
           '
 
       - name: Build the ISO in a Privileged Container
-        uses: add-ons/docker-run-action@v1
-        with:
-          image: archlinux:latest
-          options: -v ${{ github.workspace }}:/github/workspace --privileged
-          run: |
-            cd /github/workspace
+        run: |
+          docker run \
+            --rm \
+            --privileged \
+            -v "${{ github.workspace }}":/work \
+            -w /work \
+            archlinux:latest \
             mkarchiso -v -w work -o out archlive
 
       - name: Set Timestamp for Artifact Name
