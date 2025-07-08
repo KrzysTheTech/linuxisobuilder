@@ -54,30 +54,21 @@ jobs:
 
       - name: Prepare System Customizations
         run: |
-          # Create directories for wallpaper, gsettings, user skeleton, and hooks
           mkdir -p config/includes.chroot/usr/share/backgrounds/custom
           mkdir -p config/includes.chroot/usr/share/glib-2.0/schemas
           mkdir -p config/includes.chroot/etc/skel
           mkdir -p config/hooks/chroot
-
-          # Download wallpaper from the new URL
           wget -O config/includes.chroot/usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.nintendo.com%2Feu%2Fmedia%2Fimages%2Fassets%2Fnintendo_switch_2_games%2Fmariokartworld%2F2x1_NSwitch2_MarioKartWorld_image1600w.jpg&f=1&ipt=f182cce6fcc98c604ce81f8fb7563d107057922db6dfe730d25bfe8042c89c03"
-
-          # Create GSettings override for the wallpaper
           cat <<EOF > config/includes.chroot/usr/share/glib-2.0/schemas/99_custom_wallpaper.gschema.override
           [org.gnome.desktop.background]
           picture-uri='file:///usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg'
           picture-uri-dark='file:///usr/share/backgrounds/custom/mariokartworld-wallpaper.jpg'
           EOF
-
-          # Create hook to compile the new GSettings schema
           cat <<EOF > config/hooks/chroot/99-compile-schemas.hook.chroot
           #!/bin/sh
           glib-compile-schemas /usr/share/glib-2.0/schemas/
           EOF
           chmod +x config/hooks/chroot/99-compile-schemas.hook.chroot
-
-          # Add nala alias to the default .bashrc for new users
           echo "alias apt='nala'" >> config/includes.chroot/etc/skel/.bashrc
 
       - name: Create Custom Installer Message
@@ -101,7 +92,9 @@ jobs:
             --iso-publisher "GitHub Actions" \
             --iso-volume "Debian Sid Installer" \
             --memtest none \
-            --cache true
+            --cache true \
+            # THIS IS THE NEW FLAG to force the installer kernel
+            --debian-installer-kernel-packages "linux-image-amd64"
 
       - name: Create package list for installed system
         run: |
