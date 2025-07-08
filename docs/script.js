@@ -13,16 +13,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Check if we are on the download page by looking for the download-section
     if (document.getElementById('download-section')) {
+        // !! IMPORTANT: Verify this repository name matches exactly !!
+        // Based on your previous input: 'KrzysTheTech/linuxisobuild'
+        // If your repo is 'linuxisobuilder', then it should be 'KrzysTheTech/linuxisobuilder'
         const repo = 'KrzysTheTech/linuxisobuild';
         const apiUrl = `https://api.github.com/repos/${repo}/releases/latest`;
 
-        // IMPORTANT: GitHub API requests without authentication might be subject
-        // to lower rate limits. If you encounter issues, consider setting up
-        // a backend proxy to handle authenticated requests securely.
+        // IMPORTANT: GitHub API requests without authentication are subject
+        // to stricter rate limits (typically 60 requests per hour per IP).
+        // If you hit this limit, the fetch will fail.
+        // For higher traffic or private repos, consider a backend proxy.
         fetch(apiUrl)
         .then(response => {
             if (!response.ok) {
-                console.error(`GitHub API error: ${response.status} ${response.statusText}`);
+                // Log the exact status for debugging
+                console.error(`GitHub API error: Status ${response.status}: ${response.statusText}`);
                 throw new Error('Network response was not ok ' + response.statusText);
             }
             return response.json();
@@ -56,3 +61,4 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+    
