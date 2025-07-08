@@ -15,7 +15,7 @@ jobs:
       - name: Update Pacman and Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          # Add 'go' back for building the 'yay' AUR helper
+          # Add 'go' for building the 'yay' AUR helper
           pacman -S --noconfirm --needed git base-devel archiso wget go
 
       - name: Configure Git
@@ -133,7 +133,8 @@ jobs:
           cd yay
           chown -R nobody:nobody .
           sudo -u nobody GOCACHE="$(pwd)/.cache" makepkg -s --noconfirm
-          pacman -U --root ../archlive/airootfs --dbpath ../archlive/airootfs/var/lib/pacman -noconfirm *.pkg.tar.zst
+          # CORRECTED: Changed -noconfirm to --noconfirm
+          pacman -U --root ../archlive/airootfs --dbpath ../archlive/airootfs/var/lib/pacman --noconfirm *.pkg.tar.zst
           cd ..
           rm -rf yay
 
@@ -224,4 +225,25 @@ jobs:
           /usr/local/bin/install-refind
           EOF
           chmod +x archlive/airootfs/etc/calamares/scripts/post-install
-          cat <<EOF > archlive/
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
+          ---
+          reboot-now: true
+          post-install:
+              - command: "/etc/calamares/scripts/post-install"
+          EOF
+
+      - name: Build the ISO
+        id: build_iso
+        run: |
+          ISO_DATE=$(date +%Y.%m.%d)
+          echo "TIMESTAMP=${ISO_DATE}" >> $GITHUB_ENV
+          mkdir work out
+          chown -R nobody:nobody work out
+          sudo -u nobody mkarchiso -v -w work -o out archlive
+
+      - name: Upload ISO as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Updated filename for the full ISO
+          name: archlinux-full-${{ env.TIMESTAMP }}-x86_64.iso
+          path: out/*.iso
