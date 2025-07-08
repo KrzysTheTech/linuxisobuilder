@@ -1,4 +1,4 @@
-name: Build Arch Linux GUI Installer ISO
+name: Build Full Arch Linux ISO
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
       - name: Update Pacman and Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          # CORRECTED: Added 'go' package for building yay
+          # Add 'go' back for building the 'yay' AUR helper
           pacman -S --noconfirm --needed git base-devel archiso wget go
 
       - name: Configure Git
@@ -30,10 +30,10 @@ jobs:
       - name: Configure ISO Profile and Compression
         run: |
           cat <<EOF > archlive/profile.conf
-          iso_name="archlinux-gui-installer"
-          iso_label="ARCH_GUI_$(date +%Y%m)"
+          iso_name="archlinux-full"
+          iso_label="ARCH_FULL_$(date +%Y%m)"
           iso_publisher="KrzysTheTech <krzysztofdemirkuzniak@gmail.com>"
-          iso_application="Arch Linux GUI Installer"
+          iso_application="Arch Linux Full Installer"
           iso_version="$(date +%Y.%m.%d)"
           install_dir="arch"
           buildmodes=('iso')
@@ -45,9 +45,6 @@ jobs:
             ["/etc/shadow"]="0:0:400"
             ["/root"]="0:0:750"
             ["/root/.automated_script.sh"]="0:0:755"
-            ["/usr/local/bin/choose-mirror"]="0:0:755"
-            ["/usr/local/bin/Installation_guide"]="0:0:755"
-            ["/usr/local/bin/livecd-sound"]="0:0:755"
           )
           EOF
 
@@ -59,7 +56,6 @@ jobs:
           CheckSpace
           SigLevel = Never
           ParallelDownloads = 10
-
           [core-testing]
           Include = /etc/pacman.d/mirrorlist
           [core]
@@ -80,17 +76,16 @@ jobs:
           Include = /etc/pacman.d/mirrorlist
           EOF
 
-      - name: Define Extensive Package List (500+ packages)
+      - name: Define Extensive Package List (Full Installation)
         run: |
+          # This full list of packages will be included in the ISO and installed on the target system.
           cat <<EOF > archlive/packages.x86_64
           # --- BASE SYSTEM & BOOTLOADER ---
           base base-devel linux linux-firmware refind
-          
           # --- INSTALLER & LIVE ENVIRONMENT ---
           archiso calamares fastfetch htop wget curl unzip p7zip networkmanager
           xorg-server xorg-xinit openbox tint2
-          
-          # --- DESKTOP ENVIRONMENTS ---
+          # --- DESKTOP ENVIRONMENTS (ALL INCLUDED) ---
           plasma-meta kde-applications-meta
           gnome gnome-extra
           xfce4 xfce4-goodies
@@ -98,8 +93,7 @@ jobs:
           mate mate-extra
           budgie-desktop budgie-extras
           deepin deepin-extra
-          
-          # --- WINDOW MANAGERS & WAYLAND ---
+          # --- WINDOW MANAGERS & WAYLAND (ALL INCLUDED) ---
           i3-wm i3status dmenu
           awesome
           qtile
@@ -107,64 +101,28 @@ jobs:
           sway waybar wofi
           hyprland xdg-desktop-portal-hyprland
           wayfire
-          dynamic-window-manager
-          
           # --- WEB BROWSERS & NETWORKING ---
           firefox chromium brave-browser
           thunderbird
           filezilla
-          
           # --- OFFICE & PRODUCTIVITY ---
-          libreoffice-fresh
-          onlyoffice-desktopeditors
-          gimp inkscape scribus
-          zotero
-          
+          libreoffice-fresh onlyoffice-desktopeditors
+          gimp inkscape scribus zotero
           # --- DEVELOPMENT ---
-          git gcc gdb make cmake
-          python python-pip python-virtualenv
-          nodejs npm
-          go rust
-          neovim code
-          qtcreator
-          docker docker-compose
-          podman
-          
+          git gcc gdb make cmake python python-pip nodejs npm go rust neovim code qtcreator docker podman
           # --- VIRTUALIZATION ---
           qemu-full virt-manager virt-viewer dnsmasq vde2 bridge-utils openbsd-netcat
           virtualbox virtualbox-guest-iso
-          
           # --- MULTIMEDIA & GRAPHICS ---
-          vlc mpv
-          ffmpeg
-          kdenlive shotcut openshot
-          blender
-          obs-studio
-          audacity lmms
-          krita mypaint
-          darktable rawtherapee
-          shotwell gwenview
-          spotify-launcher
-          
+          vlc mpv ffmpeg kdenlive shotcut openshot blender obs-studio audacity lmms krita mypaint darktable rawtherapee shotwell gwenview spotify-launcher
           # --- GAMING ---
           steam lutris wine gamemode
-          # Strategy & Simulation
           0ad the-battle-for-wesnoth freeciv flightgear openttd endless-sky
-          # Action & Arcade
           xonotic assaultcube sauerbraten teeworlds supertuxkart hedgewars extremetuxracer
-          # Puzzle & Platformer
           supertux pingus frozen-bubble neverball
-          # RPG
           minetest flare-engine valyria-tear
-          
           # --- UTILITIES ---
-          gparted bleachbit timeshift
-          stacer
-          veracrypt
-          keepassxc
-          qbittorrent
-          conky
-          
+          gparted bleachbit timeshift stacer veracrypt keepassxc qbittorrent conky
           # --- FONTS ---
           noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-dejavu ttf-liberation
           EOF
@@ -174,25 +132,24 @@ jobs:
           git clone https://aur.archlinux.org/yay.git
           cd yay
           chown -R nobody:nobody .
-          # With 'go' installed in the container, this step will now succeed
-          sudo -u nobody makepkg -s --noconfirm
+          sudo -u nobody GOCACHE="$(pwd)/.cache" makepkg -s --noconfirm
           pacman -U --root ../archlive/airootfs --dbpath ../archlive/airootfs/var/lib/pacman -noconfirm *.pkg.tar.zst
           cd ..
           rm -rf yay
 
-      - name: Configure Calamares for DE Selection
+      - name: Configure Calamares for Full Installation
         run: |
           mkdir -p archlive/airootfs/etc/calamares/modules
           mkdir -p archlive/airootfs/etc/calamares/branding/archlinux
           mkdir -p archlive/airootfs/etc/calamares/scripts
 
-          # Main Calamares settings - added 'packages' module
+          # Calamares settings now use 'unpackfs' instead of 'packages'
           cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
           modules-load:
             - welcome
             - keyboard
             - partition
-            - packages
+            - unpackfs
             - users
             - summary
             - finished
@@ -202,54 +159,31 @@ jobs:
           -id: preserve-user-home-on-reinstall
           EOF
           
-          # Calamares branding
+          # Branding for the full installer
           cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
           componentName: archlinux
           welcomeStyle: "true"
           welcomeText: |
-            <h2>Welcome to the Arch Linux GUI installer.</h2>
-            <p>This installer will guide you through installing Arch Linux.</p>
+            <h2>Welcome to the Arch Linux Full installer.</h2>
+            <p>This installer will copy the complete live environment, including all applications and desktop environments, to your computer.</p>
             <p><b>WARNING:</b> This build uses testing repositories and is intended for experienced users who are comfortable with potential system instability.</p>
           productName: Arch Linux
-          productVersion: Rolling
+          productVersion: Rolling (Full)
           productUrl: "https://archlinux.org"
           shortName: Arch Linux
           productLogo: "/usr/share/pixmaps/archlinux-logo.svg"
           EOF
-
-          # Packages module for DE/WM selection
-          cat <<EOF > archlive/airootfs/etc/calamares/modules/packages.conf
+          
+          # Configuration for the unpackfs module
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
           ---
-          backend: "pacman"
-          operations:
-            - try_install
-          
-          groups:
-            - name: "Desktop Environments"
-              description: "Select one or more full-featured desktop environments."
-              exclusive: false
-              packages:
-                - "KDE Plasma": plasma-meta
-                - "GNOME": gnome
-                - "XFCE": xfce4
-                - "Cinnamon": cinnamon
-                - "MATE": mate
-                - "Budgie": budgie-desktop
-                - "Deepin": deepin
-          
-            - name: "Window Managers"
-              description: "Select one or more lightweight window managers."
-              exclusive: false
-              packages:
-                - "i3": i3-wm
-                - "Sway (Wayland)": sway
-                - "Hyprland (Wayland)": hyprland
-                - "Awesome": awesome
-                - "BSPWM": bspwm
-                - "Qtile": qtile
+          unpack:
+              - source: "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs"
+                sourcefs: "squashfs"
+                destination: ""
           EOF
-          
-          # Partition module configuration
+
+          # Partition module configuration remains the same
           cat <<EOF > archlive/airootfs/etc/calamares/modules/partition.conf
           ---
           efiSystemPartition: "/boot"
@@ -261,26 +195,19 @@ jobs:
 
       - name: Configure Calamares Autostart
         run: |
-          # 1. Configure agetty for autologin
           mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
           cat <<EOF > archlive/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
           [Service]
           ExecStart=
           ExecStart=-/usr/bin/agetty --autologin root --noclear %I \$TERM
           EOF
-
-          # 2. Create .xinitrc to start Openbox and Calamares
           cat <<EOF > archlive/airootfs/root/.xinitrc
           #!/bin/sh
-          # Start a minimal window manager and a panel
           openbox &
           tint2 &
-          # Launch the installer fullscreen
           calamares --fullscreen
           EOF
           chmod +x archlive/airootfs/root/.xinitrc
-
-          # 3. Use .bash_profile to trigger startx on login
           cat <<EOF > archlive/airootfs/root/.bash_profile
           [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
           EOF
@@ -292,34 +219,9 @@ jobs:
           refind-install
           EOF
           chmod +x archlive/airootfs/usr/local/bin/install-refind
-
           cat <<EOF > archlive/airootfs/etc/calamares/scripts/post-install
           #!/bin/bash
           /usr/local/bin/install-refind
           EOF
           chmod +x archlive/airootfs/etc/calamares/scripts/post-install
-          
-          cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
-          ---
-          reboot-now: true
-          post-install:
-              - command: "/etc/calamares/scripts/post-install"
-          EOF
-
-      - name: Build the ISO
-        id: build_iso
-        run: |
-          ISO_DATE=$(date +%Y.%m.%d)
-          echo "TIMESTAMP=${ISO_DATE}" >> $GITHUB_ENV
-          
-          mkdir work out
-          chown -R nobody:nobody work out
-          
-          # This build will take a very long time and produce a large ISO file.
-          sudo -u nobody mkarchiso -v -w work -o out archlive
-
-      - name: Upload ISO as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: archlinux-gui-calamers-installer-netinstall-${{ env.TIMESTAMP }}-x86_64.iso
-          path: out/*.iso
+          cat <<EOF > archlive/
