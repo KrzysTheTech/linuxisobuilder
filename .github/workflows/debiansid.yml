@@ -93,8 +93,7 @@ jobs:
             --iso-publisher "GitHub Actions" \
             --iso-volume "Debian Sid Installer" \
             --memtest none \
-            --cache true \
-            --debian-installer-kernel-packages "linux-image-amd64"
+            --cache true
 
       - name: Create package list for installed system
         run: |
