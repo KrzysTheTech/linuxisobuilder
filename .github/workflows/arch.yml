@@ -28,23 +28,17 @@ jobs:
 
       - name: Build AUR Helper and Create Local Repo
         run: |
-          # Create the repo directory, now named 'yay_repo'
           mkdir -p /yay_repo
-          
-          # Clone and build yay
           git clone https://aur.archlinux.org/yay.git
           cd yay
           chown -R nobody:nobody .
           sudo -u nobody GOCACHE="$(pwd)/.cache" makepkg -s --noconfirm
-          
-          # Add the built package to the 'yay' repo database
           repo-add /yay_repo/yay.db.tar.gz *.pkg.tar.zst
           cd ..
           rm -rf yay
 
       - name: Configure Pacman to use Local Repo
         run: |
-          # The custom repository is now named [yay]
           cat <<EOF > archlive/pacman.conf
           [options]
           Architecture = auto
@@ -79,8 +73,9 @@ jobs:
       - name: Define Extensive Package List (Full Installation)
         run: |
           cat <<EOF > archlive/packages.x86_64
-          # --- BASE SYSTEM & BOOTLOADER ---
-          base base-devel linux linux-firmware refind
+          # --- BASE SYSTEM & BOOTLOADER (NOW GRUB) ---
+          base base-devel linux linux-firmware
+          grub mtools syslinux edk2-shell memtest86+ memtest86+-efi
           # --- AUR HELPER ---
           yay
           # --- INSTALLER & LIVE ENVIRONMENT ---
@@ -128,11 +123,11 @@ jobs:
           noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-dejavu ttf-liberation
           EOF
 
-      - name: Configure Calamares for Full Installation
+      - name: Configure Calamares for GRUB Installation
         run: |
           mkdir -p archlive/airootfs/etc/calamares/modules
-          mkdir -p archlive/airootfs/etc/calamares/branding/archlinux
-          mkdir -p archlive/airootfs/etc/calamares/scripts
+          
+          # Calamares settings now include the 'bootloader' module
           cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
           modules-load:
             - welcome
@@ -140,12 +135,32 @@ jobs:
             - partition
             - unpackfs
             - users
+            - bootloader
             - summary
             - finished
           branding: archlinux
           prompt-install: false
           -id: preserve-user-home-on-reinstall
           EOF
+          
+          # Configuration for the bootloader module to install GRUB
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/bootloader.conf
+          ---
+          bootloader: "grub"
+          
+          grub_cfg: "/boot/grub/grub.cfg"
+          
+          efi_directory: "/boot"
+          
+          grub_install_args:
+              - "--target=x86_64-efi"
+              - "--efi-directory=/boot"
+              - "--bootloader-id=arch"
+              - "--recheck"
+          EOF
+
+          # Previous Calamares configurations
+          mkdir -p archlive/airootfs/etc/calamares/branding/archlinux
           cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
           componentName: archlinux
           welcomeStyle: "true"
@@ -174,6 +189,12 @@ jobs:
           swap-size: 2048M
           default-filesystem: "ext4"
           EOF
+          # The finished module no longer needs a custom script
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
+          ---
+          reboot-now: true
+          EOF
+
 
       - name: Configure Calamares Autostart
         run: |
@@ -194,26 +215,9 @@ jobs:
           [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
           EOF
 
-      - name: Configure Post-Installation and Profile
+      - name: Configure ISO Profile
         run: |
-          # Post-install script for bootloader
-          cat <<EOF > archlive/airootfs/usr/local/bin/install-refind
-          #!/bin/bash
-          refind-install
-          EOF
-          chmod +x archlive/airootfs/usr/local/bin/install-refind
-          cat <<EOF > archlive/airootfs/etc/calamares/scripts/post-install
-          #!/bin/bash
-          /usr/local/bin/install-refind
-          EOF
-          chmod +x archlive/airootfs/etc/calamares/scripts/post-install
-          cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
-          ---
-          reboot-now: true
-          post-install:
-              - command: "/etc/calamares/scripts/post-install"
-          EOF
-          # ISO Profile configuration
+          # ISO Profile configuration with updated boot modes
           cat <<EOF > archlive/profile.conf
           iso_name="archlinux-full"
           iso_label="ARCH_FULL_$(date +%Y%m)"
@@ -223,8 +227,7 @@ jobs:
           install_dir="arch"
           buildmodes=('iso')
           bootmodes=('bios.syslinux.mbr' 'bios.syslinux.eltorito'
-                     'uefi-shell' 'uefi-ia32.grub.esp' 'uefi-x64.grub.esp'
-                     'uefi-ia32.refind.esp' 'uefi-x64.refind.esp')
+                     'uefi-shell' 'uefi-ia32.grub.esp' 'uefi-x64.grub.esp')
           airootfs_image_tool_options=('-comp' 'xz' '-b' '1M')
           file_permissions=(
             ["/etc/shadow"]="0:0:400"
@@ -233,17 +236,11 @@ jobs:
           EOF
 
       - name: Build the ISO
-        id: build_iso
         run: |
-          ISO_DATE=$(date +%Y.%m.%d)
-          echo "TIMESTAMP=${ISO_DATE}" >> $GITHUB_ENV
-          mkdir work out
-          # CORRECTED: The mkarchiso command is now run as root, as required.
-          # The unnecessary 'chown' command has been removed.
           mkarchiso -v -w work -o out archlive
 
       - name: Upload ISO as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: archlinux-full-${{ env.TIMESTAMP }}-x86_64.iso
+          name: archlinux-full-${{ env.TIMESTAMP }_grub}-x86_64.iso
           path: out/*.iso
