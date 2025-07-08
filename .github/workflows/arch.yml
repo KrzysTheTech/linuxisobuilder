@@ -1,4 +1,4 @@
-name: Build Full Arch Linux ISO
+name: Build Arch Linux Netinstall ISO
 
 on:
   workflow_dispatch:
@@ -15,127 +15,40 @@ jobs:
       - name: Update Pacman and Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed git base-devel archiso wget go
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "KrzysTheTech"
-          git config --global user.email "krzysztofdemirkuzniak@gmail.com"
+          pacman -S --noconfirm --needed git base-devel archiso wget
 
       - name: Create archiso Profile
         run: |
           cp -r /usr/share/archiso/configs/releng/ archlive
 
-      - name: Build AUR Helper and Create Local Repo
-        run: |
-          mkdir -p /yay_repo
-          git clone https://aur.archlinux.org/yay.git
-          cd yay
-          chown -R nobody:nobody .
-          sudo -u nobody GOCACHE="$(pwd)/.cache" makepkg -s --noconfirm
-          repo-add /yay_repo/yay.db.tar.gz *.pkg.tar.zst
-          cd ..
-          rm -rf yay
-
-      - name: Configure Pacman to use Local Repo
-        run: |
-          cat <<EOF > archlive/pacman.conf
-          [options]
-          Architecture = auto
-          CheckSpace
-          SigLevel = Never
-          ParallelDownloads = 10
-
-          [yay]
-          SigLevel = Optional TrustAll
-          Server = file:///yay_repo
-
-          [core-testing]
-          Include = /etc/pacman.d/mirrorlist
-          [core]
-          Include = /etc/pacman.d/mirrorlist
-          [extra-testing]
-          Include = /etc/pacman.d/mirrorlist
-          [extra]
-          Include = /etc/pacman.d/mirrorlist
-          [kde-unstable]
-          Include = /etc/pacman.d/mirrorlist
-          [gnome-unstable]
-          Include = /etc/pacman.d/mirrorlist
-          [multilib-testing]
-          Include = /etc/pacman.d/mirrorlist
-          [multilib]
-          Include = /etc/pacman.d/mirrorlist
-          [testing]
-          Include = /etc/pacman.d/mirrorlist
-          EOF
-
-      - name: Define Extensive Package List (Full Installation)
+      - name: Define Minimal Package List for Live Environment
         run: |
           cat <<EOF > archlive/packages.x86_64
-          # --- BASE SYSTEM & BOOTLOADER (NOW GRUB) ---
-          base base-devel linux linux-firmware
+          # --- BASE SYSTEM ---
+          base linux linux-firmware
+          # --- BOOTLOADER & BOOT UTILITIES ---
           grub mtools syslinux edk2-shell memtest86+ memtest86+-efi
-          # --- AUR HELPER ---
-          yay
           # --- INSTALLER & LIVE ENVIRONMENT ---
-          archiso calamares fastfetch htop wget curl unzip p7zip networkmanager
+          archiso calamares networkmanager
           xorg-server xorg-xinit openbox tint2
-          # --- DESKTOP ENVIRONMENTS (ALL INCLUDED) ---
-          plasma-meta kde-applications-meta
-          gnome gnome-extra
-          xfce4 xfce4-goodies
-          cinnamon
-          mate mate-extra
-          budgie-desktop budgie-extras
-          deepin deepin-extra
-          # --- WINDOW MANAGERS & WAYLAND (ALL INCLUDED) ---
-          i3-wm i3status dmenu
-          awesome
-          qtile
-          bspwm sxhkd
-          sway waybar wofi
-          hyprland xdg-desktop-portal-hyprland
-          wayfire
-          # --- WEB BROWSERS & NETWORKING ---
-          firefox chromium brave-browser
-          thunderbird
-          filezilla
-          # --- OFFICE & PRODUCTIVITY ---
-          libreoffice-fresh onlyoffice-desktopeditors
-          gimp inkscape scribus zotero
-          # --- DEVELOPMENT ---
-          git gcc gdb make cmake python python-pip nodejs npm go rust neovim code qtcreator docker podman
-          # --- VIRTUALIZATION ---
-          qemu-full virt-manager virt-viewer dnsmasq vde2 bridge-utils openbsd-netcat
-          virtualbox virtualbox-guest-iso
-          # --- MULTIMEDIA & GRAPHICS ---
-          vlc mpv ffmpeg kdenlive shotcut openshot blender obs-studio audacity lmms krita mypaint darktable rawtherapee shotwell gwenview spotify-launcher
-          # --- GAMING ---
-          steam lutris wine gamemode
-          0ad the-battle-for-wesnoth freeciv flightgear openttd endless-sky
-          xonotic assaultcube sauerbraten teeworlds supertuxkart hedgewars extremetuxracer
-          supertux pingus frozen-bubble neverball
-          minetest flare-engine valyria-tear
           # --- UTILITIES ---
-          gparted bleachbit timeshift stacer veracrypt keepassxc qbittorrent conky
-          # --- FONTS ---
-          noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-dejavu ttf-liberation
+          wget git fastfetch
           EOF
 
-      - name: Configure Calamares for GRUB Installation
+      - name: Configure Calamares for Netinstall
         run: |
           mkdir -p archlive/airootfs/etc/calamares/modules
           
-          # Calamares settings now include the 'bootloader' module
+          # Calamares settings
           cat <<EOF > archlive/airootfs/etc/calamares/settings.conf
           modules-load:
             - welcome
             - keyboard
             - partition
-            - unpackfs
+            - packages
             - users
             - bootloader
+            - displaymanager
             - summary
             - finished
           branding: archlinux
@@ -143,43 +56,109 @@ jobs:
           -id: preserve-user-home-on-reinstall
           EOF
           
-          # Configuration for the bootloader module to install GRUB
+          # Bootloader module
           cat <<EOF > archlive/airootfs/etc/calamares/modules/bootloader.conf
           ---
           bootloader: "grub"
-          
-          grub_cfg: "/boot/grub/grub.cfg"
-          
           efi_directory: "/boot"
-          
-          grub_install_args:
-              - "--target=x86_64-efi"
-              - "--efi-directory=/boot"
-              - "--bootloader-id=arch"
-              - "--recheck"
+          grub_install_args: ["--bootloader-id=arch"]
           EOF
 
-          # Previous Calamares configurations
+          # UPDATED: Packages module with 50+ groups and 100+ packages
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/packages.conf
+          ---
+          backend: "pacman"
+          operations:
+            - try_install
+          
+          groups:
+            - name: "🖥️ Desktop Environments"
+              description: "Full-featured desktop environments."
+              packages: ["KDE Plasma": plasma-meta, "GNOME": gnome, "XFCE": xfce4, "Cinnamon": cinnamon, "MATE": mate]
+            - name: "🪟 Window Managers"
+              description: "Lightweight and tiling window managers."
+              packages: ["i3": i3-wm, "Sway": sway, "Hyprland": hyprland, "bspwm": bspwm, "Awesome": awesome, "Qtile": qtile]
+            - name: "💡 Display Managers"
+              description: "Graphical login managers."
+              packages: ["SDDM (KDE)": sddm, "GDM (GNOME)": gdm, "LightDM (XFCE/etc)": lightdm lightdm-gtk-greeter]
+            - name: "🧠 Kernels"
+              description: "Choose an alternative kernel."
+              packages: ["Long-Term Support Kernel": linux-lts, "Zen Kernel": linux-zen]
+            - name: "🐚 Shells"
+              description: "Popular command-line shells."
+              packages: ["Zsh": zsh, "Fish": fish]
+            - name: "🌐 Web Browsers"
+              packages: ["Firefox": firefox, "Chromium": chromium, "Brave": brave-browser]
+            - name: "🛠️ Core Development"
+              packages: ["Base Development Tools": base-devel, "Git": git]
+            - name: "👨‍💻 Editors & IDEs"
+              packages: ["VS Code": code, "Neovim": neovim, "Kate": kate, "Gedit": gedit]
+            - name: "🐍 Python Development"
+              packages: ["Python & Pip": python python-pip]
+            - name: "🕸️ Web Development"
+              packages: ["Node.js / npm": nodejs npm]
+            - name: "⚙️ C/C++ Development"
+              packages: ["Clang Compiler": clang, "CMake": cmake]
+            - name: "📦 Containerization"
+              packages: ["Docker": docker docker-compose, "Podman": podman]
+            - name: "🎨 Raster Graphics"
+              packages: ["GIMP": gimp, "Krita": krita, "MyPaint": mypaint]
+            - name: "✒️ Vector Graphics"
+              packages: ["Inkscape": inkscape]
+            - name: "📸 Photo Management"
+              packages: ["darktable": darktable, "rawtherapee": rawtherapee, "Gwenview": gwenview]
+            - name: "🧊 3D Graphics"
+              packages: ["Blender": blender]
+            - name: "🎬 Video Editing & Playback"
+              packages: ["Kdenlive": kdenlive, "OBS Studio": obs-studio, "VLC": vlc, "mpv": mpv]
+            - name: "🎵 Audio Production & Playback"
+              packages: ["Audacity": audacity, "LMMS": lmms, "Ardour": ardour, "Elisa": elisa]
+            - name: "✍️ Office Suites"
+              packages: ["LibreOffice": libreoffice-fresh, "OnlyOffice": onlyoffice-desktopeditors]
+            - name: "✉️ Email & Communication"
+              packages: ["Thunderbird": thunderbird, "Discord": discord, "Telegram": telegram-desktop]
+            - name: "🎮 Gaming Platforms"
+              packages: ["Steam": steam, "Lutris": lutris, "Heroic Games Launcher": heroic-games-launcher-bin]
+            - name: "🕹️ Gaming Utilities"
+              packages: ["Wine": wine, "Gamemode": gamemode, "MangoHud": mangohud, "Bottles": bottles]
+            - name: "📂 File Managers"
+              packages: ["Dolphin (KDE)": dolphin, "Thunar (XFCE)": thunar, "Nautilus (GNOME)": nautilus, "Ranger (Terminal)": ranger]
+            - name: "💻 Terminal Emulators"
+              packages: ["Konsole (KDE)": konsole, "GNOME Terminal": gnome-terminal, "Kitty (GPU)": kitty, "Alacritty (GPU)": alacritty]
+            - name: "📈 System Monitoring"
+              packages: ["htop": htop, "btop": btop, "Conky": conky]
+            - name: "💾 Backup Utilities"
+              packages: ["Timeshift": timeshift, "Restic": restic]
+            - name: "🔑 Security & Privacy"
+              packages: ["KeepassXC": keepassxc, "VeraCrypt": veracrypt]
+          EOF
+          
+          # Display Manager module
+          cat <<EOF > archlive/airootfs/etc/calamares/modules/displaymanager.conf
+          ---
+          displaymanagers:
+            - name: "SDDM"
+              service: "sddm.service"
+              package: "sddm"
+            - name: "GDM"
+              service: "gdm.service"
+              package: "gdm"
+            - name: "LightDM"
+              service: "lightdm.service"
+              package: "lightdm"
+          default: "sddm"
+          EOF
+
+          # Other Calamares configs
           mkdir -p archlive/airootfs/etc/calamares/branding/archlinux
           cat <<EOF > archlive/airootfs/etc/calamares/branding/archlinux/branding.desc
           componentName: archlinux
           welcomeStyle: "true"
           welcomeText: |
-            <h2>Welcome to the Arch Linux Full installer.</h2>
-            <p>This installer will copy the complete live environment, including all applications and desktop environments, to your computer.</p>
-            <p><b>WARNING:</b> This build uses testing repositories and is intended for experienced users who are comfortable with potential system instability.</p>
+            <h2>Welcome to the Arch Linux Netinstaller.</h2>
+            <p>An internet connection is required.</p>
           productName: Arch Linux
-          productVersion: Rolling (Full)
-          productUrl: "https://archlinux.org"
-          shortName: Arch Linux
-          productLogo: "/usr/share/pixmaps/archlinux-logo.svg"
-          EOF
-          cat <<EOF > archlive/airootfs/etc/calamares/modules/unpackfs.conf
-          ---
-          unpack:
-              - source: "/run/archiso/bootmnt/arch/x86_64/airootfs.sfs"
-                sourcefs: "squashfs"
-                destination: ""
+          productVersion: Rolling (Netinstall)
           EOF
           cat <<EOF > archlive/airootfs/etc/calamares/modules/partition.conf
           ---
@@ -189,15 +168,14 @@ jobs:
           swap-size: 2048M
           default-filesystem: "ext4"
           EOF
-          # The finished module no longer needs a custom script
           cat <<EOF > archlive/airootfs/etc/calamares/modules/finished.conf
           ---
           reboot-now: true
           EOF
 
-
-      - name: Configure Calamares Autostart
+      - name: Configure Calamares Autostart and ISO Profile
         run: |
+          # Autostart
           mkdir -p archlive/airootfs/etc/systemd/system/getty@tty1.service.d/
           cat <<EOF > archlive/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf
           [Service]
@@ -214,37 +192,27 @@ jobs:
           cat <<EOF > archlive/airootfs/root/.bash_profile
           [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && startx
           EOF
-
-      - name: Configure ISO Profile
-        run: |
-          # ISO Profile configuration with updated boot modes
+          # ISO Profile
           cat <<EOF > archlive/profile.conf
-          iso_name="archlinux-full-netinstall"
-          iso_label="ARCH_FULL_$(date +%Y%m)"
-          iso_publisher="KrzysTheTech <krzysztofdemirkuzniak@gmail.com>"
-          iso_application="Arch Linux Full Installer"
+          iso_name="archlinux-netinstall"
+          iso_label="ARCH_NET_$(date +%Y%m)"
+          iso_publisher="KrzysTheTech"
+          iso_application="Arch Linux Netinstaller"
           iso_version="$(date +%Y.%m.%d)"
           install_dir="arch"
           buildmodes=('iso')
-          bootmodes=('bios.syslinux.mbr' 'bios.syslinux.eltorito'
-                     'uefi-shell' 'uefi-ia32.grub.esp' 'uefi-x64.grub.esp')
+          bootmodes=('bios.syslinux.mbr' 'bios.syslinux.eltorito' 'uefi-shell' 'uefi-ia32.grub.esp' 'uefi-x64.grub.esp')
           airootfs_image_tool_options=('-comp' 'xz' '-b' '1M')
-          file_permissions=(
-            ["/etc/shadow"]="0:0:400"
-            ["/root"]="0:0:750"
-          )
+          file_permissions=(["/etc/shadow"]="0:0:400" ["/root"]="0:0:750")
           EOF
 
       - name: Build the ISO
         run: |
-          # Create a TIMESTAMP env var for the artifact name
           echo "TIMESTAMP=$(date +%Y.%m.%d)" >> $GITHUB_ENV
-          # Build the ISO as root
-          mkarchiso -v -w work -o out archlive
+          mkarchiso -v -w /tmp/work -o /tmp/out archlive
 
       - name: Upload ISO as Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Updated artifact name
-          name: archlinux-full-netinstall-${{ env.TIMESTAMP }}-grub-x86_64.iso
-          path: out/*.iso
+          name: archlinux-netinstall-${{ env.TIMESTAMP }}-grub-x86_64.iso
+          path: /tmp/out/*.iso
