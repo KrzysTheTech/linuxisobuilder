@@ -15,7 +15,8 @@ jobs:
       - name: Update Pacman and Install Dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed git base-devel archiso wget
+          # CORRECTED: Added 'go' package for building yay
+          pacman -S --noconfirm --needed git base-devel archiso wget go
 
       - name: Configure Git
         run: |
@@ -173,6 +174,7 @@ jobs:
           git clone https://aur.archlinux.org/yay.git
           cd yay
           chown -R nobody:nobody .
+          # With 'go' installed in the container, this step will now succeed
           sudo -u nobody makepkg -s --noconfirm
           pacman -U --root ../archlive/airootfs --dbpath ../archlive/airootfs/var/lib/pacman -noconfirm *.pkg.tar.zst
           cd ..
@@ -321,4 +323,3 @@ jobs:
         with:
           name: archlinux-gui-calamers-installer-netinstall-${{ env.TIMESTAMP }}-x86_64.iso
           path: out/*.iso
-          
