@@ -219,7 +219,7 @@ jobs:
         run: |
           # ISO Profile configuration with updated boot modes
           cat <<EOF > archlive/profile.conf
-          iso_name="archlinux-full"
+          iso_name="archlinux-full-netinstall"
           iso_label="ARCH_FULL_$(date +%Y%m)"
           iso_publisher="KrzysTheTech <krzysztofdemirkuzniak@gmail.com>"
           iso_application="Arch Linux Full Installer"
@@ -237,10 +237,14 @@ jobs:
 
       - name: Build the ISO
         run: |
+          # Create a TIMESTAMP env var for the artifact name
+          echo "TIMESTAMP=$(date +%Y.%m.%d)" >> $GITHUB_ENV
+          # Build the ISO as root
           mkarchiso -v -w work -o out archlive
 
       - name: Upload ISO as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: archlinux-full-${{ env.TIMESTAMP }_grub}-x86_64.iso
+          # Updated artifact name
+          name: archlinux-full-netinstall-${{ env.TIMESTAMP }}-grub-x86_64.iso
           path: out/*.iso
