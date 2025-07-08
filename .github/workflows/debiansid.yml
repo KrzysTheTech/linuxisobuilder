@@ -17,6 +17,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ADD THIS STEP TO FREE UP DISK SPACE
+      - name: Maximize Build Space
+        run: |
+          echo "Freeing up disk space..."
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          echo "Disk space after cleanup:"
+          df -h
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -41,15 +51,16 @@ jobs:
 
       - name: Create package list
         run: |
+          # A more realistic package list for a single-desktop ISO
           echo "task-gnome-desktop" > config/package-lists/gnome.list.chroot
           echo "firefox" >> config/package-lists/gnome.list.chroot
           echo "vlc" >> config/package-lists/gnome.list.chroot
           echo "ffmpeg" >> config/package-lists/gnome.list.chroot
           echo "build-essential" >> config/package-lists/gnome.list.chroot
-          echo "crossbuild-essential-*" >> config/package-lists/gnome.list.chroot
+          # NOTE: crossbuild-essential-* is very large. Uncomment only if absolutely needed.
+          # echo "crossbuild-essential-*" >> config/package-lists/gnome.list.chroot
           echo "kdenlive" >> config/package-lists/gnome.list.chroot
-          echo "task-kde-desktop" >> config/package-lists/gnome.list.chroot
-          echo "task-xfce-desktop" >> config/package-lists/gnome.list.chroot
+          # NOTE: Removed task-kde-desktop and task-xfce-desktop for a focused build.
 
       - name: Build the ISO
         run: |
@@ -66,3 +77,4 @@ jobs:
         with:
           name: debian-sid-gnome-installer-${{ matrix.arch }}
           path: debian-sid-gnome-installer-*-${{ matrix.arch }}.iso
+
