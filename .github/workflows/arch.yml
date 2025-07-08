@@ -18,10 +18,11 @@ jobs:
       - name: Create ISO Profile and Configuration
         run: |
           docker run --rm --entrypoint /bin/sh -v "${{ github.workspace }}":/work -w /work archlinux:latest -c '
-            # 1. Create archiso profile from template
-            cp -r /usr/share/archiso/configs/releng/ archlive
+            # CORRECTED: Use the more stable `baseline` profile instead of `releng`
+            # This fixes the "cannot stat" error and is the recommended way.
+            cp -r /usr/share/archiso/configs/baseline/ archlive
 
-            # 2. Define minimal package list for the live ISO
+            # Define minimal package list for the live ISO
             cat <<EOF > archlive/packages.x86_64
             base linux linux-firmware sudo
             grub mtools syslinux edk2-shell
@@ -30,7 +31,7 @@ jobs:
             wget git fastfetch
             EOF
 
-            # 3. Create all necessary Calamares config files
+            # Create all necessary Calamares config files
             mkdir -p archlive/airootfs/etc/calamares/modules
             mkdir -p archlive/airootfs/etc/calamares/scripts
 
@@ -92,7 +93,7 @@ jobs:
                 - "yay -S --noconfirm"
             EOF
 
-            # --- netinstall.yaml (Massively Expanded Package List) ---
+            # --- netinstall.yaml (The Big Package List) ---
             cat <<'EOF' > archlive/airootfs/etc/calamares/netinstall.yaml
             packages:
                 # KERNELS
