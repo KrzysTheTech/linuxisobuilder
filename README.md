@@ -1,19 +1,28 @@
 # linuxisobuilder
 
-A command-line tool to simplify the creation of custom Ubuntu and Debian based ISO images using `live-build`.
+A command-line tool to simplify the creation of custom Linux ISO images.
 
 ## 📜 Description
 
-This project provides a simple C++ based interactive tool that guides the user through selecting a distribution, version, and desktop environment. It then generates the necessary `live-build` configuration to build a custom live CD.
+This project provides a simple C++ based interactive tool that guides the user through selecting a distribution, and then provides the necessary commands to build a custom live CD using the distribution's native tools.
 
-**Version: 0.0.2**
+## ✨ Supported Distributions
+* **Debian** (using `live-build`)
+* **Ubuntu** (using `live-build`)
+* **Fedora** (using `lorax` and Kickstart)
+* **Arch Linux** (using `archiso`)
 
 ***
 
 ## 📦 Prerequisites
 
-Before you begin, you need to have `live-build` and the `build-essential` package installed. `build-essential` includes all the necessary tools for compiling, such as `make` and `g++`.
+This tool is designed to be self-sufficient. When you first run it and select a distribution family, it will check for the necessary build tools (`live-build`, `lorax`, or `archiso`) and prompt you to install them if they are missing.
+
+You only need a C++ compiler and `make` to build this tool itself.
 
 ```bash
-sudo apt-get update
-sudo apt-get install live-build build-essential
+# On Debian/Ubuntu
+sudo apt-get install build-essential
+
+# On Fedora
+sudo dnf groupinstall "Development Tools"
