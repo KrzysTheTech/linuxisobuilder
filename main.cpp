@@ -3,8 +3,45 @@
 #include <string>
 #include <cstdlib>
 #include <stdexcept>
+#include <map>
 
-// Function to display a menu and get user's choice
+// --- Function Declarations ---
+int display_menu(const std::string& title, const std::vector<std::string>& options);
+bool command_exists(const std::string& command);
+void install_dependencies(const std::string& distro_family);
+void handle_debian_build();
+void handle_ubuntu_build();
+void handle_fedora_build();
+void handle_arch_build();
+
+// --- Main Function ---
+int main() {
+    try {
+        std::vector<std::string> distros = { "Debian", "Ubuntu", "Fedora", "Arch Linux" };
+        int choice = display_menu("Select a Distribution", distros);
+        std::string selection = distros[choice - 1];
+
+        install_dependencies(selection);
+
+        if (selection == "Debian") {
+            handle_debian_build();
+        } else if (selection == "Ubuntu") {
+            handle_ubuntu_build();
+        } else if (selection == "Fedora") {
+            handle_fedora_build();
+        } else if (selection == "Arch Linux") {
+            handle_arch_build();
+        }
+
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
+}
+
+// --- Function Implementations ---
+
 int display_menu(const std::string& title, const std::vector<std::string>& options) {
     std::cout << "--- " << title << " ---" << std::endl;
     for (size_t i = 0; i < options.size(); ++i) {
@@ -20,111 +57,94 @@ int display_menu(const std::string& title, const std::vector<std::string>& optio
         std::cin.ignore(10000, '\n');
         throw std::runtime_error("Invalid input. Please enter a number from the list.");
     }
-    
-    std::cin.ignore(10000, '\n'); // Clear the buffer
+    std::cin.ignore(10000, '\n');
     return choice;
 }
 
-// Function to execute the live-build command
-void run_live_build(const std::string& distro_codename, const std::string& desktop_package) {
-    std::string command = "lb config -d " + distro_codename + " --debian-installer live";
-    if (!desktop_package.empty()) {
-        // CORRECTED: Use --packages instead of -p
-        command += " --packages " + desktop_package;
-    }
-    
-    std::cout << "\nPreparing to run the following command: " << std::endl;
-    std::cout << command << std::endl;
-    std::cout << "This will create a new directory with the live-build configuration." << std::endl;
-    std::cout << "Do you want to continue? (y/n): ";
-    
-    char confirm;
-    std::cin >> confirm;
-    
-    if (confirm == 'y' || confirm == 'Y') {
-        std::cout << "\nRunning live-build configuration..." << std::endl;
-        int result = system(command.c_str());
-        if (result == 0) {
-            std::cout << "\nConfiguration created successfully." << std::endl;
-            std::cout << "Navigate to the new directory and run 'sudo lb build' to create the ISO." << std::endl;
+bool command_exists(const std::string& command) {
+    return system(("command -v " + command + " > /dev/null 2>&1").c_str()) == 0;
+}
+
+void install_dependencies(const std::string& distro_family) {
+    std::cout << "\nChecking for dependencies..." << std::endl;
+    if ((distro_family == "Debian" || distro_family == "Ubuntu") && !command_exists("lb")) {
+        std::cout << "live-build not found. Attempting to install..." << std::endl;
+        if (system("sudo apt-get update && sudo apt-get install live-build -y") != 0) {
+            throw std::runtime_error("Failed to install live-build. Please install it manually.");
+        }
+    } else if (distro_family == "Fedora" && !command_exists("lorax")) {
+        std::cout << "lorax not found. Attempting to install..." << std::endl;
+        if (command_exists("dnf")) {
+             if (system("sudo dnf install pykickstart lorax -y") != 0) throw std::runtime_error("Failed to install lorax.");
+        } else if (command_exists("yum")) {
+             if (system("sudo yum install pykickstart lorax -y") != 0) throw std::runtime_error("Failed to install lorax.");
         } else {
-            std::cerr << "An error occurred while running the command." << std::endl;
+            throw std::runtime_error("No DNF or YUM package manager found.");
+        }
+    } else if (distro_family == "Arch Linux" && !command_exists("mkarchiso")) {
+        std::cout << "archiso not found. Attempting to install..." << std::endl;
+        if (system("sudo pacman -S archiso --noconfirm") != 0) {
+            throw std::runtime_error("Failed to install archiso. Please install it manually.");
         }
     } else {
-        std::cout << "Operation cancelled." << std::endl;
+        std::cout << "Dependencies are satisfied." << std::endl;
     }
 }
 
-int main() {
-    try {
-        // --- Distribution Selection ---
-        std::vector<std::string> distros = {
-            "Ubuntu",
-            "Debian"
-        };
-        int distro_choice = display_menu("Select a Distribution", distros);
-        std::string selected_distro_name = distros[distro_choice - 1];
+void handle_debian_build() {
+    std::map<std::string, std::string> versions;
+    versions["10 (buster)"] = "buster";
+    versions["11 (bullseye)"] = "bullseye";
+    versions["12 (bookworm)"] = "bookworm";
+    versions["13 (trixie)"] = "trixie";
+    versions["unstable (sid)"] = "sid";
+    
+    std::vector<std::string> version_keys;
+    for(auto const& [key, val] : versions) version_keys.push_back(key);
 
-        // --- Version Selection ---
-        std::vector<std::string> versions;
-        if (selected_distro_name == "Ubuntu") {
-            versions = {
-                "devel (25.10)", "25.04", "24.10", "24.04 LTS", "22.04 LTS",
-                "20.04 LTS", "18.04 LTS (ESM)", "16.04 LTS (ESM)", "14.04 LTS (ESM+Legacy)"
-            };
-        } else { // Debian
-            versions = {
-                "unstable (sid)", "testing (trixie)", "stable (bookworm)", "oldstable (bullseye)"
-            };
-        }
-        int version_choice = display_menu("Select a Version", versions);
-        std::string selected_version = versions[version_choice - 1];
+    std::string version_key = version_keys[display_menu("Select Debian Version", version_keys) - 1];
+    std::string codename = versions[version_key];
+    
+    std::string command = "lb config -d " + codename;
+    std::cout << "Run the following command in your terminal:\n" << command << std::endl;
+}
 
-        // --- Desktop Environment Selection ---
-        std::vector<std::string> desktops = {
-            "No X11 (Server)", "GNOME", "KDE", "XFCE", "LXQT"
-        };
-        int desktop_choice = display_menu("Select a Desktop Environment", desktops);
-        std::string selected_desktop = desktops[desktop_choice - 1];
+void handle_ubuntu_build() {
+    std::map<std::string, std::string> versions;
+    versions["14.04 LTS (trusty)"] = "trusty";
+    versions["16.04 LTS (xenial)"] = "xenial";
+    versions["18.04 LTS (bionic)"] = "bionic";
+    versions["20.04 LTS (focal)"] = "focal";
+    versions["22.04 LTS (jammy)"] = "jammy";
+    versions["24.04 LTS (noble)"] = "noble";
+    versions["24.10 (oracular)"] = "oracular";
+    versions["25.04 (plucky)"] = "plucky";
+    versions["25.10 (questing)"] = "questing";
 
-        // --- Summary and Execution ---
-        std::cout << "\n--- Summary ---" << std::endl;
-        std::cout << "Distribution: " << selected_distro_name << std::endl;
-        std::cout << "Version:      " << selected_version << std::endl;
-        std::cout << "Desktop:      " << selected_desktop << std::endl;
+    std::vector<std::string> version_keys;
+    for(auto const& [key, val] : versions) version_keys.push_back(key);
 
-        // Extract the codename for the command
-        std::string distro_codename;
-        if (selected_distro_name == "Ubuntu") {
-            if (selected_version == "devel (25.10)") distro_codename = "questing";
-            else if (selected_version == "25.04") distro_codename = "plucky";
-            else if (selected_version == "24.10") distro_codename = "oracular";
-            else if (selected_version == "24.04 LTS") distro_codename = "noble";
-            else if (selected_version == "22.04 LTS") distro_codename = "jammy";
-            else if (selected_version == "20.04 LTS") distro_codename = "focal";
-            else if (selected_version == "18.04 LTS (ESM)") distro_codename = "bionic";
-            else if (selected_version == "16.04 LTS (ESM)") distro_codename = "xenial";
-            else if (selected_version == "14.04 LTS (ESM+Legacy)") distro_codename = "trusty";
-        } else { // Debian
-             if (selected_version == "unstable (sid)") distro_codename = "sid";
-             else if (selected_version == "testing (trixie)") distro_codename = "trixie";
-             else if (selected_version == "stable (bookworm)") distro_codename = "bookworm";
-             else if (selected_version == "oldstable (bullseye)") distro_codename = "bullseye";
-        }
+    std::string version_key = version_keys[display_menu("Select Ubuntu Version", version_keys) - 1];
+    std::string codename = versions[version_key];
 
-        std::string desktop_package;
-        if (selected_desktop == "GNOME") desktop_package = "gnome-core";
-        else if (selected_desktop == "KDE") desktop_package = "kde-standard";
-        else if (selected_desktop == "XFCE") desktop_package = "xfce4";
-        else if (selected_desktop == "LXQT") desktop_package = "lxqt";
-        // If "No X11 (Server)" is chosen, desktop_package remains empty, and no desktop is added.
+    std::string command = "lb config -d " + codename;
+    std::cout << "Run the following command in your terminal:\n" << command << std::endl;
+}
 
-        run_live_build(distro_codename, desktop_package);
+void handle_fedora_build() {
+    std::vector<std::string> versions = {"42", "41", "Rawhide"};
+    int version_choice = display_menu("Select Fedora Version", versions);
+    std::string selected_version = versions[version_choice - 1];
+    
+    std::cout << "\nFedora " << selected_version << " selected." << std::endl;
+    std::cout << "A kickstart file (e.g., 'fedora.ks') is required." << std::endl;
+    std::string command = "sudo lorax --product=\"Fedora\" --version=\"" + selected_version + "\" --release=\"Fedora " + selected_version + "\" ./output fedora.ks";
+    std::cout << "Run a command similar to this to build the ISO:\n" << command << std::endl;
+}
 
-    } catch (const std::runtime_error& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
-    }
-
-    return 0;
+void handle_arch_build() {
+    std::cout << "\nArch Linux is a rolling release." << std::endl;
+    std::cout << "An archiso profile directory (e.g., 'releng') is required." << std::endl;
+    std::string command = "sudo mkarchiso -v -w /tmp/archiso-work -o . releng";
+    std::cout << "Run the following command from within your profile directory's parent to build the ISO:\n" << command << std::endl;
 }
