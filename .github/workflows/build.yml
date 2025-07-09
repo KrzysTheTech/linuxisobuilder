@@ -1,11 +1,8 @@
 # GitHub Actions Workflow: Build and Package
-#
-# This workflow compiles the C++ application and packages it into
-# two formats: a Debian package (.deb) and a compressed tarball (.tar.xz).
+# This workflow compiles the C++ application and packages it for multiple formats.
 
 name: Build and Package
 
-# 🚀 Triggers the workflow on push or pull request events for the main branch
 on:
   push:
     branches: [ "main" ]
@@ -14,57 +11,103 @@ on:
 
 jobs:
   build:
-    # 🏃‍♂️ Runs the job on the latest version of Ubuntu
     runs-on: ubuntu-latest
 
     steps:
-      # 📚 Step 1: Check out the repository code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 🛠️ Step 2: Install dependencies
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev rpm zstd
 
-      # 👨‍💻 Step 3: Compile the application
       - name: Compile C++ application
-        # Use sudo to grant make the permission to execute g++
         run: sudo make
 
-      # 📦 Step 4: Create the tar.xz archive
+      # --- Package Creation ---
+
       - name: Package as tar.xz
         run: tar -cJf linuxisobuilder.tar.xz build-iso README.md
 
-      # 📦 Step 5: Prepare and build the Debian (.deb) package
-      - name: Build Debian package
+      - name: Build Debian package (.deb)
         run: |
-          # Create the Debian package structure
           mkdir -p debian/DEBIAN
           mkdir -p debian/usr/local/bin
-          
-          # Copy the compiled binary to the correct location
           cp build-iso debian/usr/local/bin/
-          
-          # Create the control file required for the .deb package
           echo "Package: linuxisobuilder" > debian/DEBIAN/control
-          echo "Version: 0.0.2" >> debian/DEBIAN/control
-          echo "Architecture: all" >> debian/DEBIAN/control
+          echo "Version: 0.0.3" >> debian/DEBIAN/control
+          echo "Architecture: amd64" >> debian/DEBIAN/control
           echo "Maintainer: KrzysTheTech" >> debian/DEBIAN/control
           echo "Description: A tool to create custom Linux ISOs." >> debian/DEBIAN/control
-          
-          # Build the .deb file using sudo to ensure correct file ownership
           sudo dpkg-deb --build debian linuxisobuilder.deb
 
-      # 📤 Step 6: Upload the tar.xz artifact
+      - name: Build RPM package (.rpm)
+        run: |
+          # Set up RPM build environment
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp build-iso ~/rpmbuild/SOURCES/
+          
+          # Create SPEC file
+          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder.spec
+          Name:       linuxisobuilder
+          Version:    0.0.3
+          Release:    1
+          Summary:    A tool to create custom Linux ISOs.
+          BuildArch:  x86_64
+
+          %description
+          A command-line tool to simplify the creation of custom Linux ISOs.
+
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          install -m 755 %{_sourcedir}/build-iso %{buildroot}/usr/local/bin/build-iso
+
+          %files
+          /usr/local/bin/build-iso
+          EOF
+
+          # Build the RPM
+          rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder.spec
+
+      - name: Build Arch Linux package (.pkg.zst)
+        run: |
+          # Create package structure
+          mkdir -p pkg/usr/local/bin
+          cp build-iso pkg/usr/local/bin/
+          
+          # Create .PKGINFO
+          cat << EOF > pkg/.PKGINFO
+          pkgname = linuxisobuilder
+          pkgver = 0.0.3
+          pkgdesc = A tool to create custom Linux ISOs.
+          arch = x86_64
+          EOF
+
+          # Create the final package
+          cd pkg
+          tar -I "zstd -c -T0" -cf ../linuxisobuilder.pkg.zst .
+
+      # --- Artifact Uploads ---
+
       - name: Upload tar.xz artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linuxisobuilder-archive
+          name: archive
           path: linuxisobuilder.tar.xz
 
-      # 📤 Step 7: Upload the .deb package artifact
       - name: Upload .deb package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linuxisobuilder-deb-package
+          name: deb
           path: linuxisobuilder.deb
+
+      - name: Upload .rpm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RPM
+          path: ~/rpmbuild/RPMS/x86_64/*.rpm
+
+      - name: Upload .pkg.zst package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg.zst
+          path: linuxisobuilder.pkg.zst
