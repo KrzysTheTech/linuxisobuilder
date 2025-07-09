@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-# ADDED: -static-libstdc++ to make the binary more portable
+# -static-libstdc++ makes the binary more portable
 CXXFLAGS = -std=c++11 -Wall -Wextra -pedantic -static-libstdc++
 LDFLAGS =
 
