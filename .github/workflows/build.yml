@@ -52,6 +52,8 @@ jobs:
           Version:    0.0.3
           Release:    1
           Summary:    A tool to create custom Linux ISOs.
+          # ADDED: License field is mandatory for RPM builds
+          License:    UNLICENSED
           BuildArch:  x86_64
 
           %description
@@ -80,6 +82,8 @@ jobs:
           pkgver = 0.0.3
           pkgdesc = A tool to create custom Linux ISOs.
           arch = x86_64
+          # ADDED: License field for correctness
+          license = custom
           EOF
 
           # Create the final package
