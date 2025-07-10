@@ -24,7 +24,7 @@ jobs:
           APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
 
       - name: Install Packaging Tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
+        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper
 
       - name: Create Source Tarball
         run: |
@@ -69,46 +69,6 @@ jobs:
 
           debuild -S -us -uc
 
-      - name: Create RPM Source Package (Minimal Build for Debug)
-        run: |
-          APP_VERSION="0.1.0"
-          APP_RELEASE_NAME="alpha1"
-          GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
-          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-          UPSTREAM_VERSION="${VERSION_STRING%-*}"
-
-          mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-          cp ./linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz ~/rpmbuild/SOURCES/
-
-          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-Name:       linuxisobuilder-cli
-Version:    ${APP_VERSION}
-Release:    1.${APP_RELEASE_NAME}.${GITHUB_RUN_NUMBER}
-Summary:    A CLI to build custom Linux ISOs.
-License:    UNLICENSED
-Source0:    linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz
-%description
-A command-line tool to simplify the creation of custom Linux ISOs.
-%prep
-%setup -q -n linuxisobuilder-${UPSTREAM_VERSION}
-%build
-# Minimal build step: create a dummy executable to avoid install errors
-echo "Creating dummy build-iso binary"
-echo -e '#!/bin/bash\necho "This is a dummy build-iso"' > build-iso
-chmod +x build-iso
-echo "Files after build:"
-ls -l
-%install
-echo "Files before install:"
-ls -l
-mkdir -p %{buildroot}/usr/local/bin
-install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
-%files
-/usr/local/bin/build-iso
-EOF
-
-          rpmbuild -bs ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-
       - name: Create Arch Linux Source Package (PKGBUILD)
         run: |
           APP_VERSION="0.1.0"
@@ -142,7 +102,6 @@ EOF
             *.dsc
             *.orig.tar.xz
             *.debian.tar.xz
-            ~/rpmbuild/SRPMS/*.src.rpm
             arch-source.tar.gz
 
   build-binary-packages:
@@ -153,12 +112,12 @@ EOF
       fail-fast: false
       matrix:
         include:
-          - { arch: amd64, rpm_arch: x86_64, cross_prefix: "" }
-          - { arch: arm64, rpm_arch: aarch64, cross_prefix: "aarch64-linux-gnu-" }
-          - { arch: i386, rpm_arch: i686, cross_prefix: "i686-linux-gnu-" }
-          - { arch: ppc64el, rpm_arch: ppc64le, cross_prefix: "powerpc64le-linux-gnu-" }
-          - { arch: riscv64, rpm_arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
-          - { arch: s390x, rpm_arch: s390x, cross_prefix: "s390x-linux-gnu-" }
+          - { arch: amd64, cross_prefix: "" }
+          - { arch: arm64, cross_prefix: "aarch64-linux-gnu-" }
+          - { arch: i386, cross_prefix: "i686-linux-gnu-" }
+          - { arch: ppc64el, cross_prefix: "powerpc64le-linux-gnu-" }
+          - { arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
+          - { arch: s390x, cross_prefix: "s390x-linux-gnu-" }
 
     steps:
       - name: Checkout repository
