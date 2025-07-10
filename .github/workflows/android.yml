@@ -1,27 +1,25 @@
-name: Build Android App
+name: Build Android Application
 
 on:
-  # Triggers the workflow on pushes or pull requests to the main branch
   push:
     branches: [ "main" ]
+    paths:
+      - 'LinuxIsoBuilderAndroid/**'
   pull_request:
-    # The 'paths' filter has been removed to trigger on any file change.
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    paths:
+      - 'LinuxIsoBuilderAndroid/**'
+      
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build Android APK
+  build-android-app:
+    name: Build Android App
     runs-on: ubuntu-latest
-
+    
     steps:
-      # Step 1: Check out the repository's code
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Build the Android app using the specified action
       - name: Build Android App
         id: build
         uses: sparkfabrik/android-build-action@v1.5.0
@@ -31,9 +29,8 @@ jobs:
           # The path to your Android project relative to the repository root.
           project_path: LinuxIsoBuilderAndroid/
 
-      # Step 3: Upload the generated APK as a workflow artifact
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linuxisobuilder-debug-apk
+          name: android-debug-apk
           path: ${{ steps.build.outputs.apk_path }}
