@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX = g++
-# -static-libstdc++ makes the binary more portable
-CXXFLAGS = -std=c++11 -Wall -Wextra -pedantic -static-libstdc++
+# UPDATED: C++ standard is now c++17
+CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic -static-libstdc++
 LDFLAGS =
 
 # Source and object files
