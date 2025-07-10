@@ -1,4 +1,4 @@
-name: Build All Source and Binary Packages
+name: Build and Publish Release
 
 on:
   push:
@@ -8,125 +8,11 @@ on:
 env:
   APP_VERSION: "0.1.0"
   APP_RELEASE_NAME: "alpha1"
+  RELEASE_TAG: "0.1.0-alpha1"
 
 jobs:
-  build-source-packages:
-    name: Build Source Packages
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          path: 'repo_source'
-
-      - name: Generate Version String
-        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
-
-      - name: Install Packaging Tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
-
-      - name: Create Source Tarball
-        run: |
-          FULL_VERSION_STRING="${{ env.VERSION_STRING }}"
-          UPSTREAM_VERSION="${FULL_VERSION_STRING%-*}"
-          tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
-            --exclude=./repo_source/.git \
-            --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
-            ./repo_source
-      
-      - name: Create Debian Source Package
-        working-directory: ./repo_source
-        run: |
-          mkdir -p debian
-          # Create control file
-          echo "Source: linuxisobuilder" > debian/control
-          echo "Section: utils" >> debian/control
-          echo "Priority: optional" >> debian/control
-          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/control
-          echo "Build-Depends: debhelper-compat (= 13)" >> debian/control
-          echo "" >> debian/control
-          echo "Package: linuxisobuilder-cli" >> debian/control
-          echo "Architecture: any" >> debian/control
-          echo "Description: CLI to build custom Linux ISOs." >> debian/control
-          # Create changelog
-          echo "linuxisobuilder (${{ env.VERSION_STRING }}) unstable; urgency=medium" > debian/changelog
-          echo "" >> debian/changelog
-          echo "  * New release." >> debian/changelog
-          echo "" >> debian/changelog
-          echo " -- KrzysTheTech <krzysztofdemirkuzniak@gmail.com>  $(date -R)" >> debian/changelog
-          # Create rules file
-          echo -e '#!/usr/bin/make -f\n\n%: \n\tdh $@' > debian/rules
-          chmod +x debian/rules
-          # Create compat file
-          echo "13" > debian/compat
-          # Build source package
-          debuild -S -us -uc
-
-      - name: Create RPM Source Package
-        run: |
-          mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-          FULL_VERSION_STRING="${{ env.VERSION_STRING }}"
-          UPSTREAM_VERSION="${FULL_VERSION_STRING%-*}"
-          cp ./linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz ~/rpmbuild/SOURCES/
-          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-          Name:       linuxisobuilder-cli
-          Version:    ${{ env.APP_VERSION }}
-          Release:    1.${{ env.APP_RELEASE_NAME }}.${{ github.run_number }}
-          Summary:    A CLI to build custom Linux ISOs.
-          License:    UNLICENSED
-          Packager:   KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
-          Source0:    linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz
-          %description
-          A command-line tool to simplify the creation of custom Linux ISOs.
-          %prep
-          %setup -q -n linuxisobuilder-${UPSTREAM_VERSION}
-          %build
-          make
-          %install
-          mkdir -p %{buildroot}/usr/local/bin
-          install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
-          %files
-          /usr/local/bin/build-iso
-          EOF
-          rpmbuild -bs ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-
-      - name: Create Arch Linux Source Package (PKGBUILD)
-        run: |
-          cat << EOF > PKGBUILD
-          # Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
-          pkgname=linuxisobuilder-cli
-          pkgver=${{ env.APP_VERSION }}_${{ env.APP_RELEASE_NAME }}
-          pkgrel=1
-          pkgdesc="A CLI to build custom Linux ISOs."
-          arch=('i686' 'x86_64' 'aarch64' 'ppc64le' 'riscv64')
-          license=('custom')
-          source=("\${pkgname}-\${pkgver}.tar.gz::https://github.com/KrzysTheTech/linuxisobuilder/archive/main.tar.gz")
-          sha256sums=('SKIP')
-          build() {
-            cd "\${srcdir}/linuxisobuilder-main"
-            make
-          }
-          package() {
-            cd "\${srcdir}/linuxisobuilder-main"
-            install -Dm755 build-iso "\${pkgdir}/usr/local/bin/build-iso"
-          }
-          EOF
-          tar -czf arch-source.tar.gz PKGBUILD
-
-      - name: Upload Source Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: source-packages
-          path: |
-            *.dsc
-            *.orig.tar.xz
-            *.debian.tar.xz
-            ~/rpmbuild/SRPMS/*.src.rpm
-            arch-source.tar.gz
-
   build-binary-packages:
     name: Build Binary for ${{ matrix.arch }}
-    needs: build-source-packages
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -142,7 +28,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup QEMU
+      - name: Setup QEMU for Cross-Compiling
         uses: docker/setup-qemu-action@v3
       - name: Generate Version String
         run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
@@ -164,10 +50,84 @@ jobs:
       - name: Create Binary Packages
         run: |
           mkdir -p packages
-          # (Full logic for creating all binary packages would go here)
-          tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso
+          tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
+          # .deb Binary
+          mkdir -p deb/DEBIAN deb/usr/local/bin
+          cp build-iso deb/usr/local/bin/
+          echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
+          echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
+          echo "Architecture: ${{ matrix.arch }}" >> deb/DEBIAN/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/DEBIAN/control
+          echo "Description: CLI to build custom Linux ISOs." >> debian/DEBIAN/control
+          fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
+          # .rpm Binary
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS}
+          cp build-iso ~/rpmbuild/SOURCES/
+          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+          Name:       linuxisobuilder-cli
+          Version:    ${{ env.APP_VERSION }}
+          Release:    1.${{ env.APP_RELEASE_NAME }}.${{ github.run_number }}
+          Summary:    A CLI to build custom Linux ISOs.
+          License:    UNLICENSED
+          BuildArch:  ${{ matrix.rpm_arch }}
+          %description
+          A command-line tool to simplify the creation of custom Linux ISOs.
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          install -m 755 %{_sourcedir}/build-iso %{buildroot}/usr/local/bin/build-iso
+          %files
+          /usr/local/bin/build-iso
+          EOF
+          rpmbuild -bb --target ${{ matrix.rpm_arch }} ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+          cp ~/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm packages/
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binary-packages-${{ matrix.arch }}
           path: packages/
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-binary-packages]
+    runs-on: ubuntu-latest
+    # Only run this job on pushes to the main branch
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Version ${{ env.RELEASE_TAG }}
+          prerelease: true
+          body: |
+            ## Version 0.1.0-alpha1
+            This is the first alpha release of the new 0.1.0 series, introducing a graphical user interface and major build system improvements.
+
+            ### ✨ New Features
+            * **New Graphical User Interface (GUI):** A brand new GUI has been introduced, built from the ground up using C++ and the modern **GTKmm 4** toolkit.
+            * **Dynamic Versioning:** The build system now embeds a detailed version string into the application.
+            * **Cross-Compilation:** The CLI tool is now cross-compiled for multiple architectures: `amd64`, `arm64`, `i386`, `ppc64el`, `riscv64`, `s390x`.
+
+            ### 📦 Build System
+            * **Automated Packaging:** The workflow automatically generates `.deb`, `.rpm`, `.pkg.zst`, and `.tar.xz` packages for the CLI.
+            
+            ---
+            
+            ## Previous Updates
+            
+            ### From v0.0.3:
+            * **Expanded Distribution Support:** Added initial support for **Fedora** and **Arch Linux** to the CLI.
+            * **Separated Debian & Ubuntu:** The Debian/Ubuntu option was split into two distinct tracks.
+
+            ### From v0.0.2:
+            * **Bug Fix:** Corrected the `live-build` command generation to use the valid `--packages` flag.
+            * **Improvement:** The compiled binary is now built with a statically linked C++ standard library for better portability.
+            
+            ### From v0.0.1:
+            * **Initial Release:** First version of the `linuxisobuilder` CLI tool.
+          files: artifacts/*/*
