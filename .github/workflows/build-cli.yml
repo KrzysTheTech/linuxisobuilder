@@ -102,33 +102,33 @@ jobs:
       - name: Create Binary RPM Package
         run: |
           mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          cp build-iso rpmbuild/
-          specfile=rpmbuild/SPECS/linuxisobuilder-cli.spec
-          echo "Name: linuxisobuilder-cli" > $specfile
-          echo "Version: ${APP_VERSION}" >> $specfile
-          echo "Release: 1.${APP_RELEASE_NAME}.${GITHUB_RUN_NUMBER}" >> $specfile
-          echo "Summary: CLI tool for building Linux ISOs" >> $specfile
-          echo "License: Custom" >> $specfile
-          echo "Group: Development/Tools" >> $specfile
-          echo "BuildArch: $RPM_ARCH" >> $specfile
-          echo "%description" >> $specfile
-          echo "CLI tool for building Linux ISOs" >> $specfile
-          echo "%prep" >> $specfile
-          echo "%build" >> $specfile
-          echo "%install" >> $specfile
-          echo "mkdir -p %{buildroot}/usr/local/bin" >> $specfile
-          echo "install -m 755 rpmbuild/build-iso %{buildroot}/usr/local/bin/build-iso" >> $specfile
-          echo "%files" >> $specfile
-          echo "/usr/local/bin/build-iso" >> $specfile
-          rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb $specfile
+          mkdir -p rpmbuild/BUILDROOT/usr/local/bin -p
+          cp build-iso rpmbuild/BUILDROOT/usr/local/bin/
+          cat > rpmbuild/SPECS/linuxisobuilder-cli.spec <<EOF
+Name: linuxisobuilder-cli
+Version: ${APP_VERSION}
+Release: 1.${APP_RELEASE_NAME}.${GITHUB_RUN_NUMBER}
+Summary: CLI tool for building Linux ISOs
+License: Custom
+Group: Development/Tools
+BuildArch: $RPM_ARCH
+%description
+CLI tool for building Linux ISOs
+%install
+mkdir -p %{buildroot}/usr/local/bin
+install -m 755 %{_builddir}/../BUILDROOT/usr/local/bin/build-iso %{buildroot}/usr/local/bin/build-iso
+%files
+/usr/local/bin/build-iso
+EOF
+          rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/linuxisobuilder-cli.spec
 
       - name: Create Binary PKG.ZST Package
         uses: addnab/docker-run-action@v3
         with:
-          image: archlinux:base-devel
+          image: archlinux:base
           options: -v ${{ github.workspace }}:/workspace -w /workspace
           run: |
-            pacman -Sy --noconfirm zstd
+            pacman -Sy --noconfirm base-devel zstd
             mkdir -p pkgbuild/usr/local/bin
             cp build-iso pkgbuild/usr/local/bin/
             tar -cf - -C pkgbuild . | zstd -19 -T0 -o linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${PKG_ARCH}.pkg.tar.zst
