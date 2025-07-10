@@ -19,8 +19,11 @@ jobs:
         with:
           path: 'repo_source'
 
-      - name: Set VERSION_STRING
-        run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+ - name: Set VERSION_STRING
+  run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+  env:
+    APP_VERSION: ${{ env.APP_VERSION }}
+    APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
 
       - name: Install Packaging Tools
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
