@@ -50,6 +50,7 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64, ppc64el, i386, riscv64, s390x]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -65,28 +66,54 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential devscripts debhelper rpm fakeroot rpm-build zstd gcc g++ make
 
+      - name: Determine CROSS_PREFIX and RPM_ARCH
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) 
+              echo "CROSS_PREFIX=" >> $GITHUB_ENV
+              echo "RPM_ARCH=x86_64" >> $GITHUB_ENV
+              ;;
+            arm64) 
+              echo "CROSS_PREFIX=aarch64-linux-gnu-" >> $GITHUB_ENV
+              echo "RPM_ARCH=aarch64" >> $GITHUB_ENV
+              ;;
+            ppc64el) 
+              echo "CROSS_PREFIX=powerpc64le-linux-gnu-" >> $GITHUB_ENV
+              echo "RPM_ARCH=ppc64le" >> $GITHUB_ENV
+              ;;
+            i386) 
+              echo "CROSS_PREFIX=i686-linux-gnu-" >> $GITHUB_ENV
+              echo "RPM_ARCH=i686" >> $GITHUB_ENV
+              ;;
+            riscv64) 
+              echo "CROSS_PREFIX=riscv64-linux-gnu-" >> $GITHUB_ENV
+              echo "RPM_ARCH=riscv64" >> $GITHUB_ENV
+              ;;
+            s390x) 
+              echo "CROSS_PREFIX=s390x-linux-gnu-" >> $GITHUB_ENV
+              echo "RPM_ARCH=s390x" >> $GITHUB_ENV
+              ;;
+            *) 
+              echo "CROSS_PREFIX=" >> $GITHUB_ENV
+              echo "RPM_ARCH=x86_64" >> $GITHUB_ENV
+              ;;
+          esac
+
+      - name: Install Cross Compiler (if needed)
+        run: |
+          if [ -n "${{ env.CROSS_PREFIX }}" ]; then
+            TOOLCHAIN_PKG="${{ env.CROSS_PREFIX%-linux-gnu- }}"
+            sudo apt-get install -y gcc-$TOOLCHAIN_PKG g++-$TOOLCHAIN_PKG
+          else
+            sudo apt-get install -y gcc g++
+          fi
+
       - name: Compile Application
         run: |
           VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-          # Set cross compiler prefix if needed
-          case "${{ matrix.arch }}" in
-            amd64) CROSS_PREFIX="" ;;
-            arm64) CROSS_PREFIX="aarch64-linux-gnu-" ;;
-            ppc64el) CROSS_PREFIX="powerpc64le-linux-gnu-" ;;
-            i386) CROSS_PREFIX="i686-linux-gnu-" ;;
-            riscv64) CROSS_PREFIX="riscv64-linux-gnu-" ;;
-            s390x) CROSS_PREFIX="s390x-linux-gnu-" ;;
-            *) CROSS_PREFIX="" ;;
-          esac
+          make CXX="${{ env.CROSS_PREFIX }}g++" \
+               CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"$VERSION_STRING\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
 
-          # If cross-compiler is required, install it
-          if [ -n "$CROSS_PREFIX" ]; then
-            sudo apt-get install -y gcc-${CROSS_PREFIX%-linux-gnu-} g++-${CROSS_PREFIX%-linux-gnu-}
-          fi
-
-          make CXX="${CROSS_PREFIX}g++" CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"$VERSION_STRING\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
-
-      # ---- Debian Binary Package ----
       - name: Prepare Debian Packaging Files
         run: |
           mkdir -p debian
@@ -113,7 +140,6 @@ jobs:
       - name: Build Debian Binary Package
         run: dpkg-deb --build . linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.deb
 
-      # ---- RPM Binary Package ----
       - name: Prepare RPM Build Environment
         run: |
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -144,7 +170,6 @@ EOF
       - name: Build RPM Binary Package
         run: rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
 
-      # ---- Arch Linux pkg.tar.zst ----
       - name: Create Arch Linux PKGBUILD and Build
         run: |
           cat << EOF > PKGBUILD
@@ -168,20 +193,18 @@ package() {
 EOF
           makepkg --skipinteg --noconfirm --packagetype pkg.tar.zst
 
-      # ---- Binary tar.xz archive ----
       - name: Create binary tar.xz archive
         run: |
           mkdir -p binary-tar
           cp build-iso binary-tar/
           tar -cJf linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.tar.xz -C binary-tar .
 
-      # ---- Upload Binary Artifacts ----
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.arch }}
           path: |
             linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.deb
-            ~/rpmbuild/RPMS/x86_64/linuxisobuilder-cli-${APP_VERSION}-1*.rpm
+            ~/rpmbuild/RPMS/${{ env.RPM_ARCH }}/linuxisobuilder-cli-${APP_VERSION}-1*.rpm
             *.pkg.tar.zst
             linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.tar.xz
