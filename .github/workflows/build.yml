@@ -1,21 +1,18 @@
-name: Build and Package GUI v0.1.0-alpha1
+name: Build All Packages
 
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - '**.gui.cpp'
-      - 'CMakeLists.txt'
   workflow_dispatch:
 
 jobs:
   build-linux:
+    name: Build for Linux (deb, rpm, pkg.zst, tar.xz)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Generate Version String
-        id: versioning
         run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
       - name: Install Dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libgtkmm-4.0-dev rpm zstd
@@ -25,42 +22,73 @@ jobs:
           cd build
           cmake .. -DPROJECT_VERSION="${{ env.VERSION_STRING }}"
           cmake --build .
-      - name: Package Artifacts
+      - name: Create Linux Packages
         run: |
           cd build
-          # .tar.xz
+          # ADDED: Create .tar.xz archive
           tar -cJf linuxisobuilder-gui-linux.tar.xz linuxisobuilder-gui
           # .deb
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp linuxisobuilder-gui deb/usr/local/bin/
           echo "Package: linuxisobuilder-gui" > deb/DEBIAN/control
           echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
-          echo "Architecture: amd64" >> deb/DEBIAN/control
+          echo "Architecture: amd64 arm64" >> deb/DEBIAN/control
           echo "Maintainer: KrzysTheTech" >> deb/DEBIAN/control
+          echo "Depends: libgtkmm-4.0-1v5" >> deb/DEBIAN/control
           echo "Description: GUI to build custom Linux ISOs." >> deb/DEBIAN/control
           dpkg-deb --build deb linuxisobuilder-gui.deb
+          # .rpm
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp linuxisobuilder-gui ~/rpmbuild/SOURCES/
+          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder.spec
+          Name:       linuxisobuilder-gui
+          Version:    0.1.0
+          Release:    1.alpha1
+          Summary:    A GUI to build custom Linux ISOs.
+          License:    UNLICENSED
+          BuildArch:  x86_64 aarch64
+          Requires:   gtkmm4
+          %description
+          A GUI tool to simplify the creation of custom Linux ISOs.
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          install -m 755 %{_sourcedir}/linuxisobuilder-gui %{buildroot}/usr/local/bin/linuxisobuilder-gui
+          %files
+          /usr/local/bin/linuxisobuilder-gui
+          EOF
+          rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder.spec
+          # .pkg.zst
+          mkdir -p pkg/usr/local/bin
+          cp linuxisobuilder-gui pkg/usr/local/bin/
+          echo "pkgname = linuxisobuilder-gui" > pkg/.PKGINFO
+          echo "pkgver = ${{ env.VERSION_STRING }}" >> pkg/.PKGINFO
+          echo "arch = x86_64 aarch64" >> pkg/.PKGINFO
+          echo "license = custom" >> pkg/.PKGINFO
+          echo "depend = gtkmm4" >> pkg/.PKGINFO
+          cd pkg
+          tar -I "zstd -c -T0" -cf ../linuxisobuilder-gui.pkg.zst .
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-packages
           path: |
             build/linuxisobuilder-gui.deb
+            build/linuxisobuilder-gui.pkg.zst
+            ~/rpmbuild/RPMS/x86_64/*.rpm
+            # ADDED: Include tar.xz in upload
             build/linuxisobuilder-gui-linux.tar.xz
 
   build-windows:
+    name: Build for Windows (x64)
     runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Generate Version String
-        id: versioning
         run: echo "VERSION_STRING=0.1.0-alpha1~$(Get-Date -Format 'yyyyMMdd')-${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-gtkmm4
+        with: { msystem: MINGW64, update: true, install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-gtkmm4 }
       - name: Configure and Build
         shell: msys2 {0}
         run: |
@@ -71,31 +99,42 @@ jobs:
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-exe
+          name: windows-packages
           path: build/linuxisobuilder-gui.exe
 
   build-macos:
-    runs-on: macos-latest
+    name: Build for macOS (Intel & Apple Silicon)
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            name: macOS (Intel)
+          - os: macos-14
+            name: macOS (Apple Silicon)
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Generate Version String
-        id: versioning
         run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
       - name: Install Dependencies
-        run: brew install gtkmm4 pkg-config cmake create-dmg
+        run: brew install gtkmm4 pkg-config cmake create-dmg --formula
       - name: Configure and Build
         run: |
           mkdir build
           cd build
           cmake .. -DPROJECT_VERSION="${{ env.VERSION_STRING }}"
           cmake --build .
-      - name: Create DMG Installer
-        run: create-dmg "build/linuxisobuilder-gui.app" --dmg-title="Linux ISO Builder"
+      - name: Create App and DMG
+        run: |
+          create-dmg "build/linuxisobuilder-gui.app"
+          mv *.dmg "linuxisobuilder-gui-${{ matrix.name }}.dmg"
+          cd build
+          tar -czf "../linuxisobuilder-gui-${{ matrix.name }}.app.zip" linuxisobuilder-gui.app
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-installer
+          name: macos-packages-${{ matrix.name }}
           path: |
             *.dmg
-            build/linuxisobuilder-gui.app
+            *.app.zip
