@@ -17,7 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Checkout to a specific subdirectory to avoid tar errors
           path: 'repo_source'
 
       - name: Generate Version String
@@ -28,16 +27,19 @@ jobs:
 
       - name: Create Source Tarball
         run: |
-          # Create the tarball from the parent directory, targeting the checkout path
-          tar -cJf linuxisobuilder_${{ env.APP_VERSION }}.orig.tar.xz \
+          # Strip the Debian revision from the full version string to get the upstream version.
+          UPSTREAM_VERSION="${{ env.VERSION_STRING%-*}}"
+          
+          # Create the tarball with the exact name debuild expects.
+          tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
             --exclude=./repo_source/.git \
-            --transform='s,^repo_source,linuxisobuilder-${{ env.APP_VERSION }},' \
+            --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
             ./repo_source
       
       - name: Create Debian Source Package
         working-directory: ./repo_source
         run: |
-          # Run debuild from within the source code directory
+          # Run debuild from within the source code directory.
           # It will find the .orig.tar.xz in the parent directory (../)
           mkdir -p debian
           # Create control file
@@ -67,8 +69,8 @@ jobs:
       - name: Create RPM Source Package
         run: |
           mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-          # Copy the tarball created in the root of the workspace
-          cp ./linuxisobuilder_${{ env.APP_VERSION }}.orig.tar.xz ~/rpmbuild/SOURCES/
+          UPSTREAM_VERSION="${{ env.VERSION_STRING%-*}}"
+          cp ./linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz ~/rpmbuild/SOURCES/
           cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
           Name:       linuxisobuilder-cli
           Version:    ${{ env.APP_VERSION }}
@@ -142,7 +144,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup QEMU for Cross-Compiling
+      - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
       - name: Generate Version String
         run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
@@ -164,12 +166,46 @@ jobs:
       - name: Create Binary Packages
         run: |
           mkdir -p packages
-          # Binary Tarball
+          # Binary .tar.xz
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso
           # .deb Binary
-          # (Full logic for creating binary .deb for each arch)
+          mkdir -p deb/DEBIAN deb/usr/local/bin
+          cp build-iso deb/usr/local/bin/
+          echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
+          echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
+          echo "Architecture: ${{ matrix.arch }}" >> deb/DEBIAN/control
+          echo "Maintainer: KrzysTheTech" >> deb/DEBIAN/control
+          echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
+          fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
           # .rpm Binary
-          # (Full logic for creating binary .rpm for each arch)
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp build-iso ~/rpmbuild/SOURCES/
+          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+          Name:       linuxisobuilder-cli
+          Version:    ${{ env.APP_VERSION }}
+          Release:    1.${{ env.APP_RELEASE_NAME }}.${{ github.run_number }}
+          Summary:    A CLI to build custom Linux ISOs.
+          License:    UNLICENSED
+          BuildArch:  ${{ matrix.rpm_arch }}
+          %description
+          A command-line tool to simplify the creation of custom Linux ISOs.
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          install -m 755 %{_sourcedir}/build-iso %{buildroot}/usr/local/bin/build-iso
+          %files
+          /usr/local/bin/build-iso
+          EOF
+          rpmbuild -bb --target ${{ matrix.rpm_arch }} ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+          cp ~/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm packages/
+          # .pkg.zst Binary
+          mkdir -p pkg/usr/local/bin
+          cp build-iso pkg/usr/local/bin/
+          echo "pkgname = linuxisobuilder-cli" > pkg/.PKGINFO
+          echo "pkgver = ${{ env.VERSION_STRING }}" >> pkg/.PKGINFO
+          echo "arch = ${{ matrix.rpm_arch }}" >> pkg/.PKGINFO
+          echo "license = custom" >> pkg/.PKGINFO
+          cd pkg
+          tar -I "zstd -c -T0" -cf ../packages/linuxisobuilder-cli_${{ matrix.rpm_arch }}.pkg.zst .
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
