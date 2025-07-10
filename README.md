@@ -12,6 +12,14 @@ This project provides a simple C++ based interactive tool that guides the user t
 * **Fedora** (using `lorax` and Kickstart)
 * **Arch Linux** (using `archiso`)
 
+## 📦 Package Formats
+
+The official builds are provided in several formats for wide compatibility:
+
+* **`.deb`**: For **Debian**, **Ubuntu**, **Mint**, **Zorin OS**, and other Debian-based distributions.
+* **`.rpm`**: For **Fedora**, **openSUSE**, **RHEL**, **CentOS**, **AlmaLinux**, **Rocky Linux**, **PLD Linux**, and other RPM-based distributions.
+* **`.pkg.zst`**: For **Arch Linux** and its derivatives. This package can be used to submit to the AUR (Arch User Repository).
+
 ***
 
 ## ⚙️ Architecture Support
@@ -22,15 +30,9 @@ The official pre-built packages provided in the **Releases** section are automat
 * **Windows:** `x86_64` (x64)
 * **macOS:** `x86_64` (Intel), `aarch64` (Apple Silicon)
 
+**Note:** Support for **Windows on ARM (`arm` and `arm64`)** is planned and will be available soon.
+
 For all other architectures (such as i386, PowerPC, RISC-V, etc.), you will need to **compile the application from the source** on the target machine.
-
-***
-
-## 📦 Prerequisites
-
-This tool is designed to be self-sufficient. When you first run it and select a distribution family, it will check for the necessary build tools and prompt you to install them if they are missing.
-
-To compile the tool itself, you will need a C++ compiler (`g++` or `clang++`) and `cmake`.
 
 ***
 
@@ -53,9 +55,3 @@ To compile the tool itself, you will need a C++ compiler (`g++` or `clang++`) an
     ```bash
     ./linuxisobuilder-gui
     ```
-
-***
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome!
