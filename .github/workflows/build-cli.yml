@@ -23,33 +23,27 @@ jobs:
         run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
 
       - name: Install Packaging Tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
+        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm build-essential
 
       - name: Create Source Tarball
         run: |
-          # CORRECTED: Assign the context variable to a shell variable first.
           FULL_VERSION_STRING="${{ env.VERSION_STRING }}"
-          # Then, use shell parameter expansion to get the upstream version.
           UPSTREAM_VERSION="${FULL_VERSION_STRING%-*}"
-          
-          # Now use the corrected shell variable.
           tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
             --exclude=./repo_source/.git \
             --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
             ./repo_source
-      
+
       - name: Create Debian Source Package
         working-directory: ./repo_source
         run: |
-          # This step will now succeed because the .orig.tar.xz file in the parent directory (../)
-          # has the correct name that matches the version in the changelog.
           mkdir -p debian
           # Create control file
           echo "Source: linuxisobuilder" > debian/control
           echo "Section: utils" >> debian/control
           echo "Priority: optional" >> debian/control
-          echo "Maintainer: KrzysTheTech <user@example.com>" >> debian/control
-          echo "Build-Depends: debhelper-compat (= 13)" >> debian/control
+          echo "Maintainer: Krzysztofdemirkuzniak <krzysztofdemirkuzniak@gmail.com>" >> debian/control
+          echo "Build-Depends: debhelper-compat (= 13), build-essential" >> debian/control
           echo "" >> debian/control
           echo "Package: linuxisobuilder-cli" >> debian/control
           echo "Architecture: any" >> debian/control
@@ -59,7 +53,7 @@ jobs:
           echo "" >> debian/changelog
           echo "  * New release." >> debian/changelog
           echo "" >> debian/changelog
-          echo " -- KrzysTheTech <user@example.com>  $(date -R)" >> debian/changelog
+          echo " -- Krzysztofdemirkuzniak <krzysztofdemirkuzniak@gmail.com>  $(date -R)" >> debian/changelog
           # Create rules file
           echo -e '#!/usr/bin/make -f\n\n%: \n\tdh $@' > debian/rules
           chmod +x debian/rules
@@ -67,58 +61,6 @@ jobs:
           echo "13" > debian/compat
           # Build source package
           debuild -S -us -uc
-
-      - name: Create RPM Source Package
-        run: |
-          mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-          # CORRECTED: Use the same shell variable logic to find the tarball.
-          FULL_VERSION_STRING="${{ env.VERSION_STRING }}"
-          UPSTREAM_VERSION="${FULL_VERSION_STRING%-*}"
-          cp ./linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz ~/rpmbuild/SOURCES/
-          
-          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-          Name:       linuxisobuilder-cli
-          Version:    ${{ env.APP_VERSION }}
-          Release:    1.${{ env.APP_RELEASE_NAME }}.${{ github.run_number }}
-          Summary:    A CLI to build custom Linux ISOs.
-          License:    UNLICENSED
-          Source0:    linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz
-          %description
-          A command-line tool to simplify the creation of custom Linux ISOs.
-          %prep
-          %setup -q -n linuxisobuilder-${UPSTREAM_VERSION}
-          %build
-          make
-          %install
-          mkdir -p %{buildroot}/usr/local/bin
-          install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
-          %files
-          /usr/local/bin/build-iso
-          EOF
-          rpmbuild -bs ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-
-      - name: Create Arch Linux Source Package (PKGBUILD)
-        run: |
-          cat << EOF > PKGBUILD
-          # Maintainer: KrzysTheTech <user@example.com>
-          pkgname=linuxisobuilder-cli
-          pkgver=${{ env.APP_VERSION }}_${{ env.APP_RELEASE_NAME }}
-          pkgrel=1
-          pkgdesc="A CLI to build custom Linux ISOs."
-          arch=('i686' 'x86_64' 'aarch64' 'ppc64le' 'riscv64')
-          license=('custom')
-          source=("\${pkgname}-\${pkgver}.tar.gz::https://github.com/KrzysTheTech/linuxisobuilder/archive/main.tar.gz")
-          sha256sums=('SKIP')
-          build() {
-            cd "\${srcdir}/linuxisobuilder-main"
-            make
-          }
-          package() {
-            cd "\${srcdir}/linuxisobuilder-main"
-            install -Dm755 build-iso "\${pkgdir}/usr/local/bin/build-iso"
-          }
-          EOF
-          tar -czf arch-source.tar.gz PKGBUILD
 
       - name: Upload Source Artifacts
         uses: actions/upload-artifact@v4
@@ -128,8 +70,6 @@ jobs:
             *.dsc
             *.orig.tar.xz
             *.debian.tar.xz
-            ~/rpmbuild/SRPMS/*.src.rpm
-            arch-source.tar.gz
 
   build-binary-packages:
     name: Build Binary for ${{ matrix.arch }}
@@ -139,42 +79,4 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: amd64, rpm_arch: x86_64, cross_prefix: "" }
-          - { arch: arm64, rpm_arch: aarch64, cross_prefix: "aarch64-linux-gnu-" }
-          - { arch: i386, rpm_arch: i686, cross_prefix: "i686-linux-gnu-" }
-          - { arch: ppc64el, rpm_arch: ppc64le, cross_prefix: "powerpc64le-linux-gnu-" }
-          - { arch: riscv64, rpm_arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
-          - { arch: s390x, rpm_arch: s390x, cross_prefix: "s390x-linux-gnu-" }
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Generate Version String
-        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev rpm zstd fakeroot
-          if [ "${{ matrix.cross_prefix }}" != "" ]; then
-            CROSS_PREFIX_VAR="${{ matrix.cross_prefix }}"
-            TOOLCHAIN_PKG_NAME="${CROSS_PREFIX_VAR%-}"
-            sudo apt-get install -y gcc-$TOOLCHAIN_PKG_NAME g++-$TOOLCHAIN_PKG_NAME
-          else
-            sudo apt-get install -y build-essential
-          fi
-      - name: Compile the application
-        run: |
-          make CXX=${{ matrix.cross_prefix }}g++ \
-               CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
-      - name: Create Binary Packages
-        run: |
-          # (Full logic for creating binary packages would go here)
-          mkdir -p packages
-          tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso
-      - name: Upload Binary Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binary-packages-${{ matrix.arch }}
-          path: packages/
+          - { arch:
