@@ -152,10 +152,13 @@ Name:       linuxisobuilder-cli
 Version:    ${APP_VERSION}
 Release:    1%{?dist}
 Summary:    A CLI to build custom Linux ISOs.
+
 License:    UNLICENSED
 Source0:    linuxisobuilder_${APP_VERSION}-${APP_RELEASE_NAME}.orig.tar.xz
+
 %description
 A command-line tool to simplify the creation of custom Linux ISOs.
+
 %prep
 %setup -q
 %build
