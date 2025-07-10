@@ -14,15 +14,48 @@ This project provides a simple C++ based interactive tool that guides the user t
 
 ***
 
+## ⚙️ Architecture Support
+
+The official pre-built packages provided in the **Releases** section are automatically built for the following common architectures:
+
+* **Linux:** `x86_64` (amd64), `aarch64` (arm64)
+* **Windows:** `x86_64` (x64)
+* **macOS:** `x86_64` (Intel), `aarch64` (Apple Silicon)
+
+For all other architectures (such as i386, PowerPC, RISC-V, etc.), you will need to **compile the application from the source** on the target machine.
+
+***
+
 ## 📦 Prerequisites
 
-This tool is designed to be self-sufficient. When you first run it and select a distribution family, it will check for the necessary build tools (`live-build`, `lorax`, or `archiso`) and prompt you to install them if they are missing.
+This tool is designed to be self-sufficient. When you first run it and select a distribution family, it will check for the necessary build tools and prompt you to install them if they are missing.
 
-You only need a C++ compiler and `make` to build this tool itself.
+To compile the tool itself, you will need a C++ compiler (`g++` or `clang++`) and `cmake`.
 
-```bash
-# On Debian/Ubuntu
-sudo apt-get install build-essential
+***
 
-# On Fedora
-sudo dnf groupinstall "Development Tools"
+## 🚀 How to Use
+
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/KrzysTheTech/linuxisobuilder.git](https://github.com/KrzysTheTech/linuxisobuilder.git)
+    cd linuxisobuilder
+    ```
+
+2.  **Compile the program:**
+    ```bash
+    mkdir build && cd build
+    cmake ..
+    cmake --build .
+    ```
+
+3.  **Run the builder:**
+    ```bash
+    ./linuxisobuilder-gui
+    ```
+
+***
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
