@@ -31,7 +31,6 @@ jobs:
 
       - name: Build with Gradle
         run: |
-          cd LinuxIsoBuilderAndroid
           chmod +x gradlew
           ./gradlew assembleDebug
 
