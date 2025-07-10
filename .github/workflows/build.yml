@@ -1,117 +1,101 @@
-# GitHub Actions Workflow: Build and Package
-# This workflow compiles the C++ application and packages it for multiple formats.
-
-name: Build and Package
+name: Build and Package GUI v0.1.0-alpha1
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    paths:
+      - '**.gui.cpp'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev rpm zstd
-
-      - name: Compile C++ application
-        run: sudo make
-
-      # --- Package Creation ---
-
-      - name: Package as tar.xz
-        run: tar -cJf linuxisobuilder.tar.xz build-iso README.md
-
-      - name: Build Debian package (.deb)
+      - name: Generate Version String
+        id: versioning
+        run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libgtkmm-4.0-dev rpm zstd
+      - name: Configure and Build
         run: |
-          mkdir -p debian/DEBIAN
-          mkdir -p debian/usr/local/bin
-          cp build-iso debian/usr/local/bin/
-          echo "Package: linuxisobuilder" > debian/DEBIAN/control
-          echo "Version: 0.0.3" >> debian/DEBIAN/control
-          echo "Architecture: amd64" >> debian/DEBIAN/control
-          echo "Maintainer: KrzysTheTech" >> debian/DEBIAN/control
-          echo "Description: A tool to create custom Linux ISOs." >> debian/DEBIAN/control
-          sudo dpkg-deb --build debian linuxisobuilder.deb
-
-      - name: Build RPM package (.rpm)
+          mkdir build
+          cd build
+          cmake .. -DPROJECT_VERSION="${{ env.VERSION_STRING }}"
+          cmake --build .
+      - name: Package Artifacts
         run: |
-          # Set up RPM build environment
-          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          cp build-iso ~/rpmbuild/SOURCES/
-          
-          # Create SPEC file
-          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder.spec
-          Name:       linuxisobuilder
-          Version:    0.0.3
-          Release:    1
-          Summary:    A tool to create custom Linux ISOs.
-          # ADDED: License field is mandatory for RPM builds
-          License:    UNLICENSED
-          BuildArch:  x86_64
+          cd build
+          # .tar.xz
+          tar -cJf linuxisobuilder-gui-linux.tar.xz linuxisobuilder-gui
+          # .deb
+          mkdir -p deb/DEBIAN deb/usr/local/bin
+          cp linuxisobuilder-gui deb/usr/local/bin/
+          echo "Package: linuxisobuilder-gui" > deb/DEBIAN/control
+          echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
+          echo "Architecture: amd64" >> deb/DEBIAN/control
+          echo "Maintainer: KrzysTheTech" >> deb/DEBIAN/control
+          echo "Description: GUI to build custom Linux ISOs." >> deb/DEBIAN/control
+          dpkg-deb --build deb linuxisobuilder-gui.deb
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build/linuxisobuilder-gui.deb
+            build/linuxisobuilder-gui-linux.tar.xz
 
-          %description
-          A command-line tool to simplify the creation of custom Linux ISOs.
-
-          %install
-          mkdir -p %{buildroot}/usr/local/bin
-          install -m 755 %{_sourcedir}/build-iso %{buildroot}/usr/local/bin/build-iso
-
-          %files
-          /usr/local/bin/build-iso
-          EOF
-
-          # Build the RPM
-          rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder.spec
-
-      - name: Build Arch Linux package (.pkg.zst)
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Generate Version String
+        id: versioning
+        run: echo "VERSION_STRING=0.1.0-alpha1~$(Get-Date -Format 'yyyyMMdd')-${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-gtkmm4
+      - name: Configure and Build
+        shell: msys2 {0}
         run: |
-          # Create package structure
-          mkdir -p pkg/usr/local/bin
-          cp build-iso pkg/usr/local/bin/
-          
-          # Create .PKGINFO
-          cat << EOF > pkg/.PKGINFO
-          pkgname = linuxisobuilder
-          pkgver = 0.0.3
-          pkgdesc = A tool to create custom Linux ISOs.
-          arch = x86_64
-          # ADDED: License field for correctness
-          license = custom
-          EOF
-
-          # Create the final package
-          cd pkg
-          tar -I "zstd -c -T0" -cf ../linuxisobuilder.pkg.zst .
-
-      # --- Artifact Uploads ---
-
-      - name: Upload tar.xz artifact
+          mkdir build
+          cd build
+          cmake -G "MinGW Makefiles" .. -DPROJECT_VERSION="${{ env.VERSION_STRING }}"
+          cmake --build .
+      - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: archive
-          path: linuxisobuilder.tar.xz
+          name: windows-exe
+          path: build/linuxisobuilder-gui.exe
 
-      - name: Upload .deb package artifact
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Generate Version String
+        id: versioning
+        run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Install Dependencies
+        run: brew install gtkmm4 pkg-config cmake create-dmg
+      - name: Configure and Build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DPROJECT_VERSION="${{ env.VERSION_STRING }}"
+          cmake --build .
+      - name: Create DMG Installer
+        run: create-dmg "build/linuxisobuilder-gui.app" --dmg-title="Linux ISO Builder"
+      - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deb
-          path: linuxisobuilder.deb
-
-      - name: Upload .rpm package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: RPM
-          path: ~/rpmbuild/RPMS/x86_64/*.rpm
-
-      - name: Upload .pkg.zst package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pkg.zst
-          path: linuxisobuilder.pkg.zst
+          name: macos-installer
+          path: |
+            *.dmg
+            build/linuxisobuilder-gui.app
