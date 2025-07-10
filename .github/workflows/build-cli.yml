@@ -16,65 +16,67 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: 'repo_source'
 
- - name: Set VERSION_STRING
-  run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
-  env:
-    APP_VERSION: ${{ env.APP_VERSION }}
-    APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
+      - name: Set VERSION_STRING
+        run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+        env:
+          APP_VERSION: ${{ env.APP_VERSION }}
+          APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
 
       - name: Install Packaging Tools
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
 
-- name: Create Source Tarball
-  run: |
-    APP_VERSION="0.1.0"
-    APP_RELEASE_NAME="alpha1"
-    GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
-    VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-    UPSTREAM_VERSION="${VERSION_STRING%-*}"
-    tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
-      --exclude=./repo_source/.git \
-      --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
-      ./repo_source
+      - name: Create Source Tarball
+        run: |
+          APP_VERSION="0.1.0"
+          APP_RELEASE_NAME="alpha1"
+          GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+          UPSTREAM_VERSION="${VERSION_STRING%-*}"
+          tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
+            --exclude=./.git \
+            --transform="s,^,linuxisobuilder-${UPSTREAM_VERSION}/," \
+            .
 
- - name: Create Debian Source Package
-  working-directory: ./repo_source
-  run: |
-    APP_VERSION="0.1.0"
-    APP_RELEASE_NAME="alpha1"
-    GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
-    VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-    
-    mkdir -p debian
-    echo "Source: linuxisobuilder" > debian/control
-    echo "Section: utils" >> debian/control
-    echo "Priority: optional" >> debian/control
-    echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/control
-    echo "Build-Depends: debhelper-compat (= 13)" >> debian/control
-    echo "" >> debian/control
-    echo "Package: linuxisobuilder-cli" >> debian/control
-    echo "Architecture: any" >> debian/control
-    echo "Description: CLI to build custom Linux ISOs." >> debian/control
+      - name: Create Debian Source Package
+        working-directory: .
+        run: |
+          APP_VERSION="0.1.0"
+          APP_RELEASE_NAME="alpha1"
+          GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
 
-    echo "linuxisobuilder (${VERSION_STRING}) unstable; urgency=medium" > debian/changelog
-    echo "" >> debian/changelog
-    echo "  * New release." >> debian/changelog
-    echo "" >> debian/changelog
-    echo " -- KrzysTheTech <krzysztofdemirkuzniak@gmail.com>  $(date -R)" >> debian/changelog
+          mkdir -p debian
+          echo "Source: linuxisobuilder" > debian/control
+          echo "Section: utils" >> debian/control
+          echo "Priority: optional" >> debian/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/control
+          echo "Build-Depends: debhelper-compat (= 13)" >> debian/control
+          echo "" >> debian/control
+          echo "Package: linuxisobuilder-cli" >> debian/control
+          echo "Architecture: any" >> debian/control
+          echo "Description: CLI to build custom Linux ISOs." >> debian/control
 
-    echo -e '#!/usr/bin/make -f\n\n%:\n\tdh $@' > debian/rules
-    chmod +x debian/rules
-    echo "13" > debian/compat
+          echo "linuxisobuilder (${VERSION_STRING}) unstable; urgency=medium" > debian/changelog
+          echo "" >> debian/changelog
+          echo "  * New release." >> debian/changelog
+          echo "" >> debian/changelog
+          echo " -- KrzysTheTech <krzysztofdemirkuzniak@gmail.com>  $(date -R)" >> debian/changelog
 
-    debuild -S -us -uc
+          echo -e '#!/usr/bin/make -f\n\n%:\n\tdh $@' > debian/rules
+          chmod +x debian/rules
+          echo "13" > debian/compat
+
+          debuild -S -us -uc
 
       - name: Create RPM Source Package
         run: |
+          APP_VERSION="0.1.0"
+          APP_RELEASE_NAME="alpha1"
+          GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
           VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
           UPSTREAM_VERSION="${VERSION_STRING%-*}"
+
           mkdir -p ~/rpmbuild/{SOURCES,SPECS}
           cp ./linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz ~/rpmbuild/SOURCES/
           cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
@@ -100,6 +102,8 @@ EOF
 
       - name: Create Arch Linux Source Package (PKGBUILD)
         run: |
+          APP_VERSION="0.1.0"
+          APP_RELEASE_NAME="alpha1"
           cat << EOF > PKGBUILD
 # Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
 pkgname=linuxisobuilder-cli
@@ -156,6 +160,9 @@ EOF
 
       - name: Set VERSION_STRING
         run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+        env:
+          APP_VERSION: ${{ env.APP_VERSION }}
+          APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
 
       - name: Install Dependencies
         run: |
