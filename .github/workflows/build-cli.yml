@@ -55,7 +55,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential devscripts debhelper fakeroot zstd gcc g++ make rpm base-devel
+          sudo apt-get install -y build-essential devscripts debhelper fakeroot zstd gcc g++ make rpm
 
       - name: Set up architecture variables
         run: |
@@ -112,16 +112,19 @@ jobs:
           echo "Group: Development/Tools" >> $specfile
           echo "BuildArch: $RPM_ARCH" >> $specfile
           echo "Description: CLI tool for building Linux ISOs" >> $specfile
-          echo "Prep: true" >> $specfile
-          echo "Build: true" >> $specfile
-          echo "Install: true" >> $specfile
+          echo "%prep" >> $specfile
+          echo "%build" >> $specfile
+          echo "%install" >> $specfile
           echo "mkdir -p %{buildroot}/usr/local/bin" >> $specfile
           echo "install -m 755 rpmbuild/build-iso %{buildroot}/usr/local/bin/build-iso" >> $specfile
-          echo "Files: /usr/local/bin/build-iso" >> $specfile
+          echo "%files" >> $specfile
+          echo "/usr/local/bin/build-iso" >> $specfile
           rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb $specfile
 
       - name: Create Binary PKG.ZST Package
+        uses: docker://archlinux:base-devel
         run: |
+          pacman -Sy --noconfirm zstd
           mkdir -p pkgbuild/usr/local/bin
           cp build-iso pkgbuild/usr/local/bin/
           tar -cf - -C pkgbuild . | zstd -19 -T0 -o linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${PKG_ARCH}.pkg.tar.zst
