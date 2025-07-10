@@ -18,12 +18,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: amd64, rpm_arch: x86_64, cross_prefix: "" }
-          - { arch: arm64, rpm_arch: aarch64, cross_prefix: "aarch64-linux-gnu-" }
-          - { arch: i386, rpm_arch: i686, cross_prefix: "i686-linux-gnu-" }
-          - { arch: ppc64el, rpm_arch: ppc64le, cross_prefix: "powerpc64le-linux-gnu-" }
-          - { arch: riscv64, rpm_arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
-          - { arch: s390x, rpm_arch: s390x, cross_prefix: "s390x-linux-gnu-" }
+          - { arch: amd64, cross_prefix: "" }
+          - { arch: arm64, cross_prefix: "aarch64-linux-gnu-" }
+          - { arch: i386, cross_prefix: "i686-linux-gnu-" }
+          - { arch: ppc64el, cross_prefix: "powerpc64le-linux-gnu-" }
+          - { arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
+          - { arch: s390x, cross_prefix: "s390x-linux-gnu-" }
 
     steps:
       - name: Checkout repository
@@ -35,7 +35,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev rpm zstd fakeroot
+          sudo apt-get install -y dpkg-dev fakeroot
           if [ "${{ matrix.cross_prefix }}" != "" ]; then
             CROSS_PREFIX_VAR="${{ matrix.cross_prefix }}"
             TOOLCHAIN_PKG_NAME="${CROSS_PREFIX_VAR%-}"
@@ -50,9 +50,10 @@ jobs:
       - name: Create Binary Packages
         run: |
           mkdir -p packages
+          # Create .tar.xz archive
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
           
-          # .deb Binary
+          # Create .deb Binary
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
           echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
@@ -62,26 +63,6 @@ jobs:
           echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
           fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
           
-          # .rpm Binary
-          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS}
-          cp build-iso ~/rpmbuild/SOURCES/
-          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-          Name:       linuxisobuilder-cli
-          Version:    ${{ env.APP_VERSION }}
-          Release:    1.${{ env.APP_RELEASE_NAME }}.${{ github.run_number }}
-          Summary:    A CLI to build custom Linux ISOs.
-          License:    UNLICENSED
-          BuildArch:  ${{ matrix.rpm_arch }}
-          %description
-          A command-line tool to simplify the creation of custom Linux ISOs.
-          %install
-          mkdir -p %{buildroot}/usr/local/bin
-          install -m 755 %{_sourcedir}/build-iso %{buildroot}/usr/local/bin/build-iso
-          %files
-          /usr/local/bin/build-iso
-          EOF
-          rpmbuild -bb --target ${{ matrix.rpm_arch }} ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-          cp ~/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm packages/
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -110,9 +91,10 @@ jobs:
             This is the first alpha release of the new 0.1.0 series.
 
             ### ✨ Features
-            * **Cross-Compilation:** The CLI tool is now cross-compiled for multiple architectures: `amd64`, `arm64`, `i386`, `ppc64el`, `riscv64`, `s390x`.
-            * **Dynamic Versioning:** The build system now embeds a detailed version string and architecture into the application, viewable with the `--version` flag.
+            * **Cross-Compilation for CLI:** The command-line tool is now cross-compiled for multiple architectures: `amd64`, `arm64`, `i386`, `ppc64el`, `riscv64`, `s390x`.
+            * **Dynamic Versioning:** The build system embeds a detailed version string and architecture into the application, viewable with the `--version` flag.
 
-            ### 📦 Build System
-            * **Automated Packaging:** The workflow automatically generates `.deb`, `.rpm`, and `.tar.xz` packages for each architecture.
+            ### 📦 Available Packages
+            * For this alpha release, only the **Debian package (`.deb`)** and a **compressed tarball (`.tar.xz`)** are provided for each supported architecture.
+            * Builds for RPM and other package formats are temporarily disabled due to complexities in the cross-compilation environment.
           files: artifacts/*/*
