@@ -8,7 +8,7 @@
 #define TOSTRING(x) STRINGIFY(x)
 
 // --- Data for our dropdowns ---
-// (Data maps remain the same as the previous version)
+// (Data maps are not shown for brevity but are required)
 
 // --- About Dialog ---
 class AboutDialog : public Gtk::AboutDialog {
@@ -51,11 +51,9 @@ MainWindow::MainWindow() :
     m_desktop_frame("3. Select Desktop"),
     m_button_generate("Generate Command")
 {
-    // --- Window Setup ---
     set_title("Linux ISO Builder");
     set_default_size(500, 400);
     
-    // --- Header Bar and Menu ---
     m_header_bar.set_show_title_buttons(true);
     set_titlebar(m_header_bar);
 
@@ -68,12 +66,9 @@ MainWindow::MainWindow() :
     about_button->signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_about_clicked));
     popover->set_child(*about_button);
 
-    // --- Main Layout ---
     m_main_box.set_margin(10);
     set_child(m_main_box);
 
-    // ComboBoxes, Button, and TextView setup is similar to previous version,
-    // using .append() instead of .pack_start() for the Gtk::Box.
     m_combo_distro.append("Select a Distribution...");
     m_combo_distro.append("Debian");
     m_combo_distro.append("Ubuntu");
@@ -94,14 +89,11 @@ MainWindow::MainWindow() :
     m_scrolled_window.set_expand();
     m_main_box.append(m_scrolled_window);
 
-    // Connect signals... (on_generate_clicked and populate_versions logic is the same)
     m_combo_distro.signal_changed().connect(sigc::mem_fun(*this, &MainWindow::on_distro_changed));
     m_button_generate.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::on_generate_clicked));
     
-    // Set initial state
     m_combo_distro.set_active(0);
-    populate_versions(); // Initialize version box
-    // ... populate desktop box ...
+    populate_versions();
     m_combo_desktop.set_active(0);
 }
 
@@ -114,19 +106,21 @@ void MainWindow::on_about_clicked() {
     about_dialog->show();
 }
 
-// ... other member function implementations (on_distro_changed, on_generate_clicked, etc.) ...
-// [NOTE: The logic inside these functions remains the same as the GTKmm 3 version]
+void MainWindow::populate_versions() { /* ... function logic ... */ }
 void MainWindow::on_distro_changed() { populate_versions(); }
-void MainWindow::populate_versions() { /* ... same logic ... */ }
-void MainWindow::on_generate_clicked() { /* ... same logic ... */ }
-
+void MainWindow::on_generate_clicked() { /* ... function logic ... */ }
 
 // --- Application Class ---
 class IsoBuilderApplication : public Gtk::Application {
 public:
-    IsoBuilderApplication() : Gtk::Application("tech.krzys.linuxisobuilder.gui") {}
+    // The create() method is the standard way to get an instance.
+    static Glib::RefPtr<IsoBuilderApplication> create() {
+        return Glib::RefPtr<IsoBuilderApplication>(new IsoBuilderApplication());
+    }
 
 protected:
+    IsoBuilderApplication() : Gtk::Application("tech.krzys.linuxisobuilder.gui") {}
+
     void on_activate() override {
         auto main_window = new MainWindow();
         add_window(*main_window);
@@ -135,6 +129,7 @@ protected:
 };
 
 int main(int argc, char* argv[]) {
-    auto app = Gtk::make_refptr<IsoBuilderApplication>();
+    // CORRECTED: Use the static create() method instead of Gtk::make_refptr
+    auto app = IsoBuilderApplication::create();
     return app->run(argc, argv);
 }
