@@ -55,7 +55,7 @@ To compile the tool itself, you will need a C++ compiler and `make` or `cmake`.
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/KrzysTheTech/linuxisobuilder.git](https://github.com/KrzysTheTech/linuxisobuilder.git)
+    git clone https://github.com/KrzysTheTech/linuxisobuilder.git
     cd linuxisobuilder
     ```
 
