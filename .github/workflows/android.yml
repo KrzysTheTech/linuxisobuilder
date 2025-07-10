@@ -1,15 +1,17 @@
-name: Combined CI Builds
+name: Build Android Application
 
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'LinuxIsoBuilderAndroid/**'
   pull_request:
-    branches: [ "main" ]
-
+    paths:
+      - 'LinuxIsoBuilderAndroid/**'
+      
   workflow_dispatch:
 
 jobs:
-  # Job 1: Build the Android Application
   build-android-app:
     name: Build Android App
     runs-on: ubuntu-latest
@@ -18,33 +20,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Android App
-        id: build
-        uses: sparkfabrik/android-build-action@v1.5.0
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          gradle_task: assembleDebug
-          project_path: LinuxIsoBuilderAndroid/
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build with Gradle
+        run: |
+          cd LinuxIsoBuilderAndroid
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
-          path: ${{ steps.build.outputs.apk_path }}
-
-  # Job 2: Test the Ruby Project
-  test-ruby:
-    name: Build and Test Ruby
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-          bundler-cache: true 
-
-      - name: Run tests
-        run: bundle exec rake
+          path: LinuxIsoBuilderAndroid/app/build/outputs/apk/debug/app-debug.apk
