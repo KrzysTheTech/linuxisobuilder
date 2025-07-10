@@ -1,0 +1,111 @@
+name: Build CLI for Multi-Architecture
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'main.cpp'
+      - 'Makefile'
+  workflow_dispatch:
+
+jobs:
+  build-cli:
+    name: Build for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            rpm_arch: x86_64
+            cross_prefix: ""
+          - arch: arm64
+            rpm_arch: aarch64
+            cross_prefix: "aarch64-linux-gnu-"
+          - arch: i386
+            rpm_arch: i686
+            cross_prefix: "i686-linux-gnu-"
+          - arch: ppc64el
+            rpm_arch: ppc64le
+            cross_prefix: "powerpc64le-linux-gnu-"
+          - arch: riscv64
+            rpm_arch: riscv64
+            cross_prefix: "riscv64-linux-gnu-"
+          - arch: s390x
+            rpm_arch: s390x
+            cross_prefix: "s390x-linux-gnu-"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup QEMU for Cross-Compiling
+        uses: docker/setup-qemu-action@v3
+
+      - name: Generate Version String
+        run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Install Cross-Compilation Toolchain
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.cross_prefix }}" != "" ]; then
+            sudo apt-get install -y gcc-${{ matrix.cross_prefix%'-'}} g++-${{ matrix.cross_prefix%'-'}}
+          else
+            sudo apt-get install -y build-essential
+          fi
+          sudo apt-get install -y dpkg-dev rpm zstd
+
+      - name: Compile the application
+        run: |
+          make CXX=${{ matrix.cross_prefix }}g++ \
+               CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
+
+      - name: Create Linux Packages
+        run: |
+          mkdir -p packages
+          # .deb
+          mkdir -p deb/DEBIAN deb/usr/local/bin
+          cp build-iso deb/usr/local/bin/
+          echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
+          echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
+          echo "Architecture: ${{ matrix.arch }}" >> deb/DEBIAN/control
+          echo "Maintainer: KrzysTheTech" >> deb/DEBIAN/control
+          echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
+          dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
+
+          # .rpm
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp build-iso ~/rpmbuild/SOURCES/
+          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+          Name:       linuxisobuilder-cli
+          Version:    0.1.0
+          Release:    1.alpha1.${{ github.run_number }}
+          Summary:    A CLI to build custom Linux ISOs.
+          License:    UNLICENSED
+          BuildArch:  ${{ matrix.rpm_arch }}
+          %description
+          A command-line tool to simplify the creation of custom Linux ISOs.
+          %install
+          mkdir -p %{buildroot}/usr/local/bin
+          install -m 755 %{_sourcedir}/build-iso %{buildroot}/usr/local/bin/build-iso
+          %files
+          /usr/local/bin/build-iso
+          EOF
+          rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+          cp ~/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm packages/
+
+          # .pkg.zst
+          mkdir -p pkg/usr/local/bin
+          cp build-iso pkg/usr/local/bin/
+          echo "pkgname = linuxisobuilder-cli" > pkg/.PKGINFO
+          echo "pkgver = ${{ env.VERSION_STRING }}" >> pkg/.PKGINFO
+          echo "arch = ${{ matrix.rpm_arch }}" >> pkg/.PKGINFO
+          echo "license = custom" >> pkg/.PKGINFO
+          cd pkg
+          tar -I "zstd -c -T0" -cf ../packages/linuxisobuilder-cli_${{ matrix.rpm_arch }}.pkg.zst .
+          
+      - name: Upload all artifacts for ${{ matrix.arch }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-packages-${{ matrix.arch }}
+          path: packages/
