@@ -101,25 +101,22 @@ jobs:
 
       - name: Create Binary RPM Package
         run: |
-          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          mkdir -p rpmbuild/BUILDROOT/usr/local/bin -p
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS,BUILDROOT/usr/local/bin}
           cp build-iso rpmbuild/BUILDROOT/usr/local/bin/
-          cat > rpmbuild/SPECS/linuxisobuilder-cli.spec <<EOF
-Name: linuxisobuilder-cli
-Version: ${APP_VERSION}
-Release: 1.${APP_RELEASE_NAME}.${GITHUB_RUN_NUMBER}
-Summary: CLI tool for building Linux ISOs
-License: Custom
-Group: Development/Tools
-BuildArch: $RPM_ARCH
-%description
-CLI tool for building Linux ISOs
-%install
-mkdir -p %{buildroot}/usr/local/bin
-install -m 755 %{_builddir}/../BUILDROOT/usr/local/bin/build-iso %{buildroot}/usr/local/bin/build-iso
-%files
-/usr/local/bin/build-iso
-EOF
+          echo "Name: linuxisobuilder-cli" > rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "Version: ${APP_VERSION}" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "Release: 1.${APP_RELEASE_NAME}.${GITHUB_RUN_NUMBER}" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "Summary: CLI tool for building Linux ISOs" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "License: Custom" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "Group: Development/Tools" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "BuildArch: $RPM_ARCH" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "%install" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "mkdir -p %{buildroot}/usr/local/bin" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "install -m 755 %{_builddir}/../BUILDROOT/usr/local/bin/build-iso %{buildroot}/usr/local/bin/build-iso" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "%files" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
+          echo "/usr/local/bin/build-iso" >> rpmbuild/SPECS/linuxisobuilder-cli.spec
           rpmbuild --define "_topdir $(pwd)/rpmbuild" -bb rpmbuild/SPECS/linuxisobuilder-cli.spec
 
       - name: Create Binary PKG.ZST Package
