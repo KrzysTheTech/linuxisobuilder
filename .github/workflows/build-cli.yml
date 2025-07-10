@@ -94,6 +94,8 @@ A command-line tool to simplify the creation of custom Linux ISOs.
 %build
 make
 %install
+echo "Files in build dir:"
+ls -l
 mkdir -p %{buildroot}/usr/local/bin
 install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
 %files
