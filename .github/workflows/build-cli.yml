@@ -19,8 +19,8 @@ jobs:
         with:
           path: 'repo_source'
 
-      - name: Generate Version String
-        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Set VERSION_STRING
+        run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
       - name: Install Packaging Tools
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
@@ -48,14 +48,17 @@ jobs:
           echo "Package: linuxisobuilder-cli" >> debian/control
           echo "Architecture: any" >> debian/control
           echo "Description: CLI to build custom Linux ISOs." >> debian/control
-          echo "linuxisobuilder ($VERSION_STRING) unstable; urgency=medium" > debian/changelog
+
+          echo "linuxisobuilder (${VERSION_STRING}) unstable; urgency=medium" > debian/changelog
           echo "" >> debian/changelog
           echo "  * New release." >> debian/changelog
           echo "" >> debian/changelog
           echo " -- KrzysTheTech <krzysztofdemirkuzniak@gmail.com>  $(date -R)" >> debian/changelog
+
           echo -e '#!/usr/bin/make -f\n\n%:\n\tdh $@' > debian/rules
           chmod +x debian/rules
           echo "13" > debian/compat
+
           debuild -S -us -uc
 
       - name: Create RPM Source Package
@@ -141,8 +144,8 @@ EOF
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Generate Version String
-        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Set VERSION_STRING
+        run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
       - name: Install Dependencies
         run: |
