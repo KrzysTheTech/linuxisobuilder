@@ -25,14 +25,17 @@ jobs:
       - name: Install Packaging Tools
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
 
-      - name: Create Source Tarball
-        run: |
-          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-          UPSTREAM_VERSION="${VERSION_STRING%-*}"
-          tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
-            --exclude=./repo_source/.git \
-            --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
-            ./repo_source
+- name: Create Source Tarball
+  run: |
+    APP_VERSION="0.1.0"
+    APP_RELEASE_NAME="alpha1"
+    GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+    VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+    UPSTREAM_VERSION="${VERSION_STRING%-*}"
+    tar -cJf "linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz" \
+      --exclude=./repo_source/.git \
+      --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
+      ./repo_source
 
  - name: Create Debian Source Package
   working-directory: ./repo_source
