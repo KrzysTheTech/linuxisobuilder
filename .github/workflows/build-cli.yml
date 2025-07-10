@@ -1,4 +1,4 @@
-name: Build All Source and Binary Packages
+name: Build Source and Binary Packages
 
 on:
   push:
@@ -10,8 +10,8 @@ env:
   APP_RELEASE_NAME: "alpha1"
 
 jobs:
-  build-source-packages:
-    name: Build Source Packages
+  build-source-tarball:
+    name: Build Source Tarball
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,9 +25,6 @@ jobs:
           APP_VERSION: ${{ env.APP_VERSION }}
           APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
 
-      - name: Install Packaging Tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper
-
       - name: Create Source Tarball
         run: |
           APP_VERSION="0.1.0"
@@ -40,14 +37,58 @@ jobs:
             --transform="s,^repo_source,linuxisobuilder-${UPSTREAM_VERSION}," \
             ./repo_source
 
-      - name: Create Debian Source Package
-        working-directory: repo_source
-        run: |
-          APP_VERSION="0.1.0"
-          APP_RELEASE_NAME="alpha1"
-          GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
-          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+      - name: Upload Source Tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-tarball
+          path: linuxisobuilder_*.orig.tar.xz
 
+  build-binaries:
+    name: Build Binaries
+    runs-on: ubuntu-latest
+    needs: build-source-tarball
+    strategy:
+      matrix:
+        arch: [amd64, arm64, ppc64el, i386, riscv64, s390x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set VERSION_STRING
+        run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+        env:
+          APP_VERSION: ${{ env.APP_VERSION }}
+          APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential devscripts debhelper rpm fakeroot rpm-build zstd gcc g++ make
+
+      - name: Compile Application
+        run: |
+          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+          # Set cross compiler prefix if needed
+          case "${{ matrix.arch }}" in
+            amd64) CROSS_PREFIX="" ;;
+            arm64) CROSS_PREFIX="aarch64-linux-gnu-" ;;
+            ppc64el) CROSS_PREFIX="powerpc64le-linux-gnu-" ;;
+            i386) CROSS_PREFIX="i686-linux-gnu-" ;;
+            riscv64) CROSS_PREFIX="riscv64-linux-gnu-" ;;
+            s390x) CROSS_PREFIX="s390x-linux-gnu-" ;;
+            *) CROSS_PREFIX="" ;;
+          esac
+
+          # If cross-compiler is required, install it
+          if [ -n "$CROSS_PREFIX" ]; then
+            sudo apt-get install -y gcc-${CROSS_PREFIX%-linux-gnu-} g++-${CROSS_PREFIX%-linux-gnu-}
+          fi
+
+          make CXX="${CROSS_PREFIX}g++" CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"$VERSION_STRING\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
+
+      # ---- Debian Binary Package ----
+      - name: Prepare Debian Packaging Files
+        run: |
           mkdir -p debian
           echo "Source: linuxisobuilder" > debian/control
           echo "Section: utils" >> debian/control
@@ -59,7 +100,7 @@ jobs:
           echo "Architecture: any" >> debian/control
           echo "Description: CLI to build custom Linux ISOs." >> debian/control
 
-          echo "linuxisobuilder (${VERSION_STRING}) unstable; urgency=medium" > debian/changelog
+          echo "linuxisobuilder (${APP_VERSION}-${APP_RELEASE_NAME}) unstable; urgency=medium" > debian/changelog
           echo "" >> debian/changelog
           echo "  * New release." >> debian/changelog
           echo "" >> debian/changelog
@@ -69,21 +110,52 @@ jobs:
           chmod +x debian/rules
           echo "13" > debian/compat
 
-          debuild -S -us -uc
+      - name: Build Debian Binary Package
+        run: dpkg-deb --build . linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.deb
 
-      - name: Create Arch Linux Source Package (PKGBUILD)
+      # ---- RPM Binary Package ----
+      - name: Prepare RPM Build Environment
         run: |
-          APP_VERSION="0.1.0"
-          APP_RELEASE_NAME="alpha1"
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp linuxisobuilder_${APP_VERSION}-${APP_RELEASE_NAME}.orig.tar.xz ~/rpmbuild/SOURCES/ || true
+
+      - name: Create RPM Spec File
+        run: |
+          cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+Name:       linuxisobuilder-cli
+Version:    ${APP_VERSION}
+Release:    1%{?dist}
+Summary:    A CLI to build custom Linux ISOs.
+License:    UNLICENSED
+Source0:    linuxisobuilder_${APP_VERSION}-${APP_RELEASE_NAME}.orig.tar.xz
+%description
+A command-line tool to simplify the creation of custom Linux ISOs.
+%prep
+%setup -q
+%build
+make
+%install
+mkdir -p %{buildroot}/usr/local/bin
+install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
+%files
+/usr/local/bin/build-iso
+EOF
+
+      - name: Build RPM Binary Package
+        run: rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
+
+      # ---- Arch Linux pkg.tar.zst ----
+      - name: Create Arch Linux PKGBUILD and Build
+        run: |
           cat << EOF > PKGBUILD
 # Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
 pkgname=linuxisobuilder-cli
-pkgver=${APP_VERSION}_${APP_RELEASE_NAME}
+pkgver=${APP_VERSION}-${APP_RELEASE_NAME}
 pkgrel=1
 pkgdesc="A CLI to build custom Linux ISOs."
-arch=('i686' 'x86_64' 'aarch64' 'ppc64le' 'riscv64')
+arch=('i686' 'x86_64' 'aarch64' 'ppc64le' 'riscv64' 's390x')
 license=('custom')
-source=("\${pkgname}-\${pkgver}.tar.gz::https://github.com/KrzysTheTech/linuxisobuilder/archive/main.tar.gz")
+source=("https://github.com/KrzysTheTech/linuxisobuilder/archive/main.tar.gz")
 sha256sums=('SKIP')
 build() {
   cd "\${srcdir}/linuxisobuilder-main"
@@ -94,71 +166,22 @@ package() {
   install -Dm755 build-iso "\${pkgdir}/usr/local/bin/build-iso"
 }
 EOF
-          tar -czf arch-source.tar.gz PKGBUILD
+          makepkg --skipinteg --noconfirm --packagetype pkg.tar.zst
 
-      - name: Upload Source Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: source-packages
-          path: |
-            *.dsc
-            *.orig.tar.xz
-            *.debian.tar.xz
-            arch-source.tar.gz
-
-  build-binary-packages:
-    name: Build Binary for ${{ matrix.arch }}
-    needs: build-source-packages
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: amd64, cross_prefix: "" }
-          - { arch: arm64, cross_prefix: "aarch64-linux-gnu-" }
-          - { arch: i386, cross_prefix: "i686-linux-gnu-" }
-          - { arch: ppc64el, cross_prefix: "powerpc64le-linux-gnu-" }
-          - { arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
-          - { arch: s390x, cross_prefix: "s390x-linux-gnu-" }
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set VERSION_STRING
-        run: echo "VERSION_STRING=${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
-        env:
-          APP_VERSION: ${{ env.APP_VERSION }}
-          APP_RELEASE_NAME: ${{ env.APP_RELEASE_NAME }}
-
-      - name: Install Dependencies
+      # ---- Binary tar.xz archive ----
+      - name: Create binary tar.xz archive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev rpm zstd fakeroot
-          if [ "${{ matrix.cross_prefix }}" != "" ]; then
-            CROSS_PREFIX_VAR="${{ matrix.cross_prefix }}"
-            TOOLCHAIN_PKG_NAME="${CROSS_PREFIX_VAR%-}"
-            sudo apt-get install -y gcc-$TOOLCHAIN_PKG_NAME g++-$TOOLCHAIN_PKG_NAME
-          else
-            sudo apt-get install -y build-essential
-          fi
+          mkdir -p binary-tar
+          cp build-iso binary-tar/
+          tar -cJf linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.tar.xz -C binary-tar .
 
-      - name: Compile the application
-        run: |
-          VERSION_STRING="${APP_VERSION}-${APP_RELEASE_NAME}~$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
-          make CXX=${{ matrix.cross_prefix }}g++ \
-               CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"$VERSION_STRING\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
-
-      - name: Create Binary Packages
-        run: |
-          mkdir -p packages
-          tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso
-
+      # ---- Upload Binary Artifacts ----
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binary-packages-${{ matrix.arch }}
-          path: packages/
+          name: binaries-${{ matrix.arch }}
+          path: |
+            linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.deb
+            ~/rpmbuild/RPMS/x86_64/linuxisobuilder-cli-${APP_VERSION}-1*.rpm
+            *.pkg.tar.zst
+            linuxisobuilder-cli_${APP_VERSION}-${APP_RELEASE_NAME}_${{ matrix.arch }}.tar.xz
