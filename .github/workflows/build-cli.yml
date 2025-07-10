@@ -79,6 +79,7 @@ jobs:
 
           mkdir -p ~/rpmbuild/{SOURCES,SPECS}
           cp ./linuxisobuilder_${UPSTREAM_VERSION}.orig.tar.xz ~/rpmbuild/SOURCES/
+
           cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
 Name:       linuxisobuilder-cli
 Version:    ${APP_VERSION}
@@ -98,6 +99,7 @@ install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
 %files
 /usr/local/bin/build-iso
 EOF
+
           rpmbuild -bs ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
 
       - name: Create Arch Linux Source Package (PKGBUILD)
