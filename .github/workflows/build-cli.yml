@@ -46,20 +46,22 @@ jobs:
       - name: Compile the application
         run: |
           make CXX=${{ matrix.cross_prefix }}g++ \
-               CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
+               CXXFLAGS="-std=c++17 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
       - name: Create Binary Packages
         run: |
           mkdir -p packages
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
+          
           # .deb Binary
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
           echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
           echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
           echo "Architecture: ${{ matrix.arch }}" >> deb/DEBIAN/control
-          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/DEBIAN/control
-          echo "Description: CLI to build custom Linux ISOs." >> debian/DEBIAN/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> deb/DEBIAN/control
+          echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
           fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
+          
           # .rpm Binary
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS}
           cp build-iso ~/rpmbuild/SOURCES/
@@ -90,7 +92,6 @@ jobs:
     name: Publish GitHub Release
     needs: [build-binary-packages]
     runs-on: ubuntu-latest
-    # Only run this job on pushes to the main branch
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Download all build artifacts
@@ -106,28 +107,12 @@ jobs:
           prerelease: true
           body: |
             ## Version 0.1.0-alpha1
-            This is the first alpha release of the new 0.1.0 series, introducing a graphical user interface and major build system improvements.
+            This is the first alpha release of the new 0.1.0 series.
 
-            ### ✨ New Features
-            * **New Graphical User Interface (GUI):** A brand new GUI has been introduced, built from the ground up using C++ and the modern **GTKmm 4** toolkit.
-            * **Dynamic Versioning:** The build system now embeds a detailed version string into the application.
+            ### ✨ Features
             * **Cross-Compilation:** The CLI tool is now cross-compiled for multiple architectures: `amd64`, `arm64`, `i386`, `ppc64el`, `riscv64`, `s390x`.
+            * **Dynamic Versioning:** The build system now embeds a detailed version string and architecture into the application, viewable with the `--version` flag.
 
             ### 📦 Build System
-            * **Automated Packaging:** The workflow automatically generates `.deb`, `.rpm`, `.pkg.zst`, and `.tar.xz` packages for the CLI.
-            
-            ---
-            
-            ## Previous Updates
-            
-            ### From v0.0.3:
-            * **Expanded Distribution Support:** Added initial support for **Fedora** and **Arch Linux** to the CLI.
-            * **Separated Debian & Ubuntu:** The Debian/Ubuntu option was split into two distinct tracks.
-
-            ### From v0.0.2:
-            * **Bug Fix:** Corrected the `live-build` command generation to use the valid `--packages` flag.
-            * **Improvement:** The compiled binary is now built with a statically linked C++ standard library for better portability.
-            
-            ### From v0.0.1:
-            * **Initial Release:** First version of the `linuxisobuilder` CLI tool.
+            * **Automated Packaging:** The workflow automatically generates `.deb`, `.rpm`, and `.tar.xz` packages for each architecture.
           files: artifacts/*/*
