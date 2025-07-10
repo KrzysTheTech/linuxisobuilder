@@ -93,8 +93,10 @@ A command-line tool to simplify the creation of custom Linux ISOs.
 %setup -q -n linuxisobuilder-${UPSTREAM_VERSION}
 %build
 make
+echo "After build, files in directory:"
+ls -l
 %install
-echo "Files in build dir:"
+echo "During install, files in directory:"
 ls -l
 mkdir -p %{buildroot}/usr/local/bin
 install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
