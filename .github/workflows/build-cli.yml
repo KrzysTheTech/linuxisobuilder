@@ -23,7 +23,7 @@ jobs:
         run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
 
       - name: Install Packaging Tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
+        run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm build-essential
 
       - name: Create Source Tarball
         run: |
@@ -48,7 +48,7 @@ jobs:
           echo "Source: linuxisobuilder" > debian/control
           echo "Section: utils" >> debian/control
           echo "Priority: optional" >> debian/control
-          echo "Maintainer: KrzysTheTech <user@example.com>" >> debian/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/control
           echo "Build-Depends: debhelper-compat (= 13)" >> debian/control
           echo "" >> debian/control
           echo "Package: linuxisobuilder-cli" >> debian/control
@@ -100,7 +100,7 @@ jobs:
       - name: Create Arch Linux Source Package (PKGBUILD)
         run: |
           cat << EOF > PKGBUILD
-          # Maintainer: KrzysTheTech <user@example.com>
+          Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
           pkgname=linuxisobuilder-cli
           pkgver=${{ env.APP_VERSION }}_${{ env.APP_RELEASE_NAME }}
           pkgrel=1
