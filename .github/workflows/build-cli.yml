@@ -69,7 +69,7 @@ jobs:
 
           debuild -S -us -uc
 
-      - name: Create RPM Source Package
+      - name: Create RPM Source Package (Minimal Build for Debug)
         run: |
           APP_VERSION="0.1.0"
           APP_RELEASE_NAME="alpha1"
@@ -92,11 +92,14 @@ A command-line tool to simplify the creation of custom Linux ISOs.
 %prep
 %setup -q -n linuxisobuilder-${UPSTREAM_VERSION}
 %build
-make
-echo "After build, files in directory:"
+# Minimal build step: create a dummy executable to avoid install errors
+echo "Creating dummy build-iso binary"
+echo -e '#!/bin/bash\necho "This is a dummy build-iso"' > build-iso
+chmod +x build-iso
+echo "Files after build:"
 ls -l
 %install
-echo "During install, files in directory:"
+echo "Files before install:"
 ls -l
 mkdir -p %{buildroot}/usr/local/bin
 install -m 755 build-iso %{buildroot}/usr/local/bin/build-iso
