@@ -42,7 +42,7 @@ jobs:
           echo "Source: linuxisobuilder" > debian/control
           echo "Section: utils" >> debian/control
           echo "Priority: optional" >> debian/control
-          echo "Maintainer: KrzysTheTech <user@example.com>" >> debian/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> debian/control
           echo "Build-Depends: debhelper-compat (= 13)" >> debian/control
           echo "" >> debian/control
           echo "Package: linuxisobuilder-cli" >> debian/control
@@ -52,7 +52,7 @@ jobs:
           echo "" >> debian/changelog
           echo "  * New release." >> debian/changelog
           echo "" >> debian/changelog
-          echo " -- KrzysTheTech <user@example.com>  $(date -R)" >> debian/changelog
+          echo " -- KrzysTheTech <krzysztofdemirkuzniak@gmail.com>  $(date -R)" >> debian/changelog
           echo -e '#!/usr/bin/make -f\n\n%:\n\tdh $@' > debian/rules
           chmod +x debian/rules
           echo "13" > debian/compat
@@ -88,7 +88,7 @@ EOF
       - name: Create Arch Linux Source Package (PKGBUILD)
         run: |
           cat << EOF > PKGBUILD
-# Maintainer: KrzysTheTech <user@example.com>
+# Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
 pkgname=linuxisobuilder-cli
 pkgver=${APP_VERSION}_${APP_RELEASE_NAME}
 pkgrel=1
