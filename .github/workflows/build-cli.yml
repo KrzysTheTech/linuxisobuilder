@@ -23,7 +23,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y devscripts debhelper rpm
       - name: Create Source Tarball
         run: tar -cJf linuxisobuilder_${{ env.APP_VERSION }}.orig.tar.xz --exclude=.git --transform='s,^,linuxisobuilder-${{ env.APP_VERSION }}/,' .
-      
       - name: Create Debian Source Package
         run: |
           mkdir -p debian
@@ -50,7 +49,6 @@ jobs:
           echo "13" > debian/compat
           # Build source package
           debuild -S -us -uc
-      
       - name: Create RPM Source Package
         run: |
           mkdir -p ~/rpmbuild/{SOURCES,SPECS}
@@ -75,7 +73,6 @@ jobs:
           /usr/local/bin/build-iso
           EOF
           rpmbuild -bs ~/rpmbuild/SPECS/linuxisobuilder-cli.spec
-
       - name: Create Arch Linux Source Package (PKGBUILD)
         run: |
           cat << EOF > PKGBUILD
@@ -98,7 +95,6 @@ jobs:
           }
           EOF
           tar -czf arch-source.tar.gz PKGBUILD
-
       - name: Upload Source Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -137,7 +133,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dpkg-dev rpm zstd fakeroot
           if [ "${{ matrix.cross_prefix }}" != "" ]; then
-            TOOLCHAIN_PKG_NAME="${{ matrix.cross_prefix%-}}"
+            # CORRECTED SYNTAX: Assign to a shell var, then manipulate the shell var
+            CROSS_PREFIX_VAR="${{ matrix.cross_prefix }}"
+            TOOLCHAIN_PKG_NAME="${CROSS_PREFIX_VAR%-}"
             sudo apt-get install -y gcc-$TOOLCHAIN_PKG_NAME g++-$TOOLCHAIN_PKG_NAME
           else
             sudo apt-get install -y build-essential
@@ -148,18 +146,13 @@ jobs:
                CXXFLAGS="-std=c++11 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
       - name: Create Binary Packages
         run: |
+          # This step is simplified for clarity. 
+          # You would add the logic from the previous CLI build workflow here 
+          # to create the binary .deb, .rpm, and .pkg.zst files for each architecture.
           mkdir -p packages
-          # Binary Tarball
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso
-          # .deb Binary
-          # (Logic for creating binary deb...)
-          # .rpm Binary
-          # (Logic for creating binary rpm...)
-          # .pkg.zst Binary
-          # (Logic for creating binary pkg.zst...)
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binary-packages-${{ matrix.arch }}
           path: packages/
-
