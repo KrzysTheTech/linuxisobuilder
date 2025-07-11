@@ -95,7 +95,7 @@ jobs:
         with:
           path: artifacts
 
-      - name: Ensure tag exists or create one
+      - name: Push tag using PAT token
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
