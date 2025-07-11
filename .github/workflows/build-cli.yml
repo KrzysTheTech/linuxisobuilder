@@ -59,14 +59,12 @@ jobs:
           # Create .tar.xz archive
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
 
-          # Create .deb Binary with safe tee method
+          # Create .deb Binary
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
 
           VERSION_STRING="${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}"
           ARCH="${{ matrix.arch }}"
-
-          echo "Generating control file for ${ARCH}..."
 
           echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
           echo "Version: ${VERSION_STRING}" >> deb/DEBIAN/control
@@ -90,34 +88,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Ensure tag exists or create one
-        run: |
-          TAG="${{ env.RELEASE_TAG }}"
-          if ! git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
-            echo "Creating tag $TAG"
-            git config user.name "GitHub Actions"
-            git config user.email "actions@github.com"
-            git tag "$TAG"
-            git push origin "$TAG"
-          else
-            echo "Tag $TAG already exists."
-          fi
-
-      publish-release:
-    name: Publish GitHub Release
-    needs: [build-binary-packages]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
       - name: Checkout repository with full history
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Important: fetch all tags and history
+          fetch-depth: 0  # Fix: required for tags and git directory access
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -146,22 +120,21 @@ jobs:
           body: |
             ## 🛠️ linuxisobuilder-cli - Fixed `.deb` Packaging
 
-            This release fixes an important issue with the `.deb` package where the `Section:` field was missing, preventing proper use with Debian repositories (`reprepro`).
+            This release fixes `.deb` metadata compatibility with `reprepro`.
 
             ### ✅ What’s Fixed
-            - Added `Section: utils` and `Priority: optional` to `.deb` control files.
-            - Verified to work with `reprepro`-based APT repositories.
-            - No functional changes to the CLI binary.
+            - Added `Section: utils` and `Priority: optional` fields in `.deb` control
+            - `dpkg-deb` now builds valid CLI packages for all major architectures
 
-            ### 📦 Includes
-            - `.deb` and `.tar.xz` packages for:
-              * amd64
-              * arm64
-              * i386
-              * riscv64
-              * ppc64el
-              * s390x
+            ### 📦 Included Packages
+            - `.tar.xz` and `.deb` for:
+              - amd64
+              - arm64
+              - i386
+              - riscv64
+              - ppc64el
+              - s390x
 
             ---
-            Tag: `${{ env.RELEASE_TAG }}`
+            Generated automatically by GitHub Actions.
           files: artifacts/*/*
