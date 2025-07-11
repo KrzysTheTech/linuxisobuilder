@@ -108,6 +108,35 @@ jobs:
             echo "Tag $TAG already exists."
           fi
 
+      publish-release:
+    name: Publish GitHub Release
+    needs: [build-binary-packages]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Important: fetch all tags and history
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Ensure tag exists or create one
+        run: |
+          TAG="${{ env.RELEASE_TAG }}"
+          if ! git tag | grep -q "^${TAG}$"; then
+            echo "Creating tag $TAG"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          else
+            echo "Tag $TAG already exists."
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -125,16 +154,13 @@ jobs:
             - No functional changes to the CLI binary.
 
             ### 📦 Includes
-            - `linuxisobuilder-cli_${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~<date>-<run>` for:
+            - `.deb` and `.tar.xz` packages for:
               * amd64
               * arm64
               * i386
               * riscv64
               * ppc64el
               * s390x
-            - Each architecture has:
-              * `.deb` file
-              * `.tar.xz` compressed archive
 
             ---
             Tag: `${{ env.RELEASE_TAG }}`
