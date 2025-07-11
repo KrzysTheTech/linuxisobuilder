@@ -50,7 +50,7 @@ jobs:
       - name: Compile the application
         run: |
           make CXX=${{ matrix.cross_prefix }}g++ \
-               CXXFLAGS="-std=c++17 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
+               CXXFLAGS="-std=c++17 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
 
       - name: Create Binary Packages
         run: |
@@ -59,21 +59,24 @@ jobs:
           # Create .tar.xz archive
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
 
-          # Create .deb Binary with fixed control file
+          # Create .deb Binary with safe tee method
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
 
-          cat > deb/DEBIAN/control <<EOF
-Package: linuxisobuilder-cli
-Version: ${{ env.VERSION_STRING }}
-Section: utils
-Priority: optional
-Architecture: ${{ matrix.arch }}
-Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
-Description: CLI to build custom Linux ISOs.
-EOF
+          VERSION_STRING="${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}"
+          ARCH="${{ matrix.arch }}"
 
-          fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
+          echo "Generating control file for ${ARCH}..."
+
+          echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
+          echo "Version: ${VERSION_STRING}" >> deb/DEBIAN/control
+          echo "Section: utils" >> deb/DEBIAN/control
+          echo "Priority: optional" >> deb/DEBIAN/control
+          echo "Architecture: ${ARCH}" >> deb/DEBIAN/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> deb/DEBIAN/control
+          echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
+
+          fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${ARCH}.deb
 
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
