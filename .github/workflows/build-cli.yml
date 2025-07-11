@@ -56,10 +56,8 @@ jobs:
         run: |
           mkdir -p packages
 
-          # Create .tar.xz archive
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
 
-          # Create .deb Binary
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
 
@@ -91,7 +89,7 @@ jobs:
       - name: Checkout repository with full history
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fix: required for tags and git directory access
+          fetch-depth: 0
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -99,12 +97,15 @@ jobs:
           path: artifacts
 
       - name: Ensure tag exists or create one
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           TAG="${{ env.RELEASE_TAG }}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
           if ! git tag | grep -q "^${TAG}$"; then
             echo "Creating tag $TAG"
-            git config user.name "GitHub Actions"
-            git config user.email "actions@github.com"
             git tag "$TAG"
             git push origin "$TAG"
           else
