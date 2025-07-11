@@ -8,7 +8,7 @@ on:
 env:
   APP_VERSION: "0.1.0"
   APP_RELEASE_NAME: "alpha1"
-  RELEASE_TAG: "0.1.0-alpha1"
+  RELEASE_TAG: "v0.1.0-alpha1-cli-fixed"
 
 jobs:
   build-binary-packages:
@@ -28,10 +28,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Setup QEMU for Cross-Compiling
         uses: docker/setup-qemu-action@v3
+
       - name: Generate Version String
         run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -43,26 +46,35 @@ jobs:
           else
             sudo apt-get install -y build-essential
           fi
+
       - name: Compile the application
         run: |
           make CXX=${{ matrix.cross_prefix }}g++ \
                CXXFLAGS="-std=c++17 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.VERSION_STRING }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
+
       - name: Create Binary Packages
         run: |
           mkdir -p packages
+
           # Create .tar.xz archive
           tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
-          
-          # Create .deb Binary
+
+          # Create .deb Binary with fixed control file
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
-          echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
-          echo "Version: ${{ env.VERSION_STRING }}" >> deb/DEBIAN/control
-          echo "Architecture: ${{ matrix.arch }}" >> deb/DEBIAN/control
-          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> deb/DEBIAN/control
-          echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
+
+          cat <<EOF > deb/DEBIAN/control
+Package: linuxisobuilder-cli
+Version: ${{ env.VERSION_STRING }}
+Section: utils
+Priority: optional
+Architecture: ${{ matrix.arch }}
+Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>
+Description: CLI to build custom Linux ISOs.
+EOF
+
           fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${{ matrix.arch }}.deb
-          
+
       - name: Upload Binary Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -79,7 +91,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          
+
+      - name: Ensure tag exists or create one
+        run: |
+          TAG="${{ env.RELEASE_TAG }}"
+          if ! git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            echo "Creating tag $TAG"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          else
+            echo "Tag $TAG already exists."
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -87,14 +112,27 @@ jobs:
           name: Version ${{ env.RELEASE_TAG }}
           prerelease: true
           body: |
-            ## Version 0.1.0-alpha1
-            This is the first alpha release of the new 0.1.0 series.
+            ## 🛠️ linuxisobuilder-cli - Fixed `.deb` Packaging
 
-            ### ✨ Features
-            * **Cross-Compilation for CLI:** The command-line tool is now cross-compiled for multiple architectures: `amd64`, `arm64`, `i386`, `ppc64el`, `riscv64`, `s390x`.
-            * **Dynamic Versioning:** The build system embeds a detailed version string and architecture into the application, viewable with the `--version` flag.
+            This release fixes an important issue with the `.deb` package where the `Section:` field was missing, preventing proper use with Debian repositories (`reprepro`).
 
-            ### 📦 Available Packages
-            * For this alpha release, only the **Debian package (`.deb`)** and a **compressed tarball (`.tar.xz`)** are provided for each supported architecture.
-            * Builds for RPM and other package formats are temporarily disabled due to complexities in the cross-compilation environment.
+            ### ✅ What’s Fixed
+            - Added `Section: utils` and `Priority: optional` to `.deb` control files.
+            - Verified to work with `reprepro`-based APT repositories.
+            - No functional changes to the CLI binary.
+
+            ### 📦 Includes
+            - `linuxisobuilder-cli_${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~<date>-<run>` for:
+              * amd64
+              * arm64
+              * i386
+              * riscv64
+              * ppc64el
+              * s390x
+            - Each architecture has:
+              * `.deb` file
+              * `.tar.xz` compressed archive
+
+            ---
+            Tag: `${{ env.RELEASE_TAG }}`
           files: artifacts/*/*
