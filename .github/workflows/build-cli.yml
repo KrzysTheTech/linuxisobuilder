@@ -63,7 +63,7 @@ jobs:
           VERSION_STRING="${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}"
           ARCH="${{ matrix.arch }}"
 
-          cat <<EOF > deb/DEBIAN/control
+          cat > deb/DEBIAN/control <<EOF
 Package: linuxisobuilder-cli
 Version: ${VERSION_STRING}
 Section: utils
