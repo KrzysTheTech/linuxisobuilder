@@ -1,4 +1,4 @@
-name: Build and Publish Release
+name: Build CLI Release
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 env:
   APP_VERSION: "0.1.0"
   APP_RELEASE_NAME: "alpha1"
-  RELEASE_TAG: "v0.1.0-alpha1-cli-fixed"
 
 jobs:
   build-binary-packages:
@@ -78,64 +77,3 @@ jobs:
         with:
           name: binary-packages-${{ matrix.arch }}
           path: packages/
-
-  publish-release:
-    name: Publish GitHub Release
-    needs: [build-binary-packages]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout repository with full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Push tag using PAT token
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          TAG="${{ env.RELEASE_TAG }}"
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
-
-          if ! git tag | grep -q "^${TAG}$"; then
-            echo "Creating and pushing tag $TAG"
-            git tag "$TAG"
-            git push origin "$TAG"
-          else
-            echo "Tag $TAG already exists."
-          fi
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: Version ${{ env.RELEASE_TAG }}
-          prerelease: true
-          body: |
-            ## 🛠️ linuxisobuilder-cli - Fixed `.deb` Packaging
-
-            This release fixes `.deb` metadata compatibility with `reprepro`.
-
-            ### ✅ What’s Fixed
-            - Added `Section: utils` and `Priority: optional` fields in `.deb` control
-            - `dpkg-deb` now builds valid CLI packages for all major architectures
-
-            ### 📦 Included Packages
-            - `.tar.xz` and `.deb` for:
-              - amd64
-              - arm64
-              - i386
-              - riscv64
-              - ppc64el
-              - s390x
-
-            ---
-            Generated automatically by GitHub Actions.
-          files: artifacts/*/*
