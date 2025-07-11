@@ -63,7 +63,7 @@ jobs:
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp build-iso deb/usr/local/bin/
 
-          cat <<EOF > deb/DEBIAN/control
+          cat > deb/DEBIAN/control <<EOF
 Package: linuxisobuilder-cli
 Version: ${{ env.VERSION_STRING }}
 Section: utils
