@@ -7,7 +7,7 @@ on:
 
 env:
   APP_VERSION: "0.1.0"
-  APP_RELEASE_NAME: "alpha1"
+  APP_RELEASE_NAME: "alpha2"
 
 jobs:
   build-linux-gui:
@@ -44,7 +44,7 @@ jobs:
           cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder.spec
           Name:       linuxisobuilder-gui
           Version:    0.1.0
-          Release:    1.alpha1
+          Release:    1.alpha2
           Summary:    A GUI to build custom Linux ISOs.
           License:    UNLICENSED
           BuildArch:  x86_64 aarch64
