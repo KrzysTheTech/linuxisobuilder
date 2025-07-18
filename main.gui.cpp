@@ -8,14 +8,50 @@
 #define TOSTRING(x) STRINGIFY(x)
 
 // --- Data for our dropdowns ---
-// (Data maps are not shown for brevity but are required)
+const std::map<std::string, std::vector<std::string>> distro_versions = {
+    {"Debian", {"12 (bookworm)", "11 (bullseye)", "13 (trixie)", "unstable (sid)", "10 (buster) [EOL: June 30, 2024]"}},
+    {"Ubuntu", {"24.04 LTS (noble)", "22.04 LTS (jammy)", "20.04 LTS (focal)", "18.04 LTS (bionic)", "25.10 (questing)", "25.04 (plucky)", "24.10 (oracular) [EOL: July 10, 2025]"}},
+    {"Fedora", {"42", "41", "Rawhide"}},
+    {"Arch Linux", {"Rolling Release"}}
+};
+
+const std::map<std::string, std::vector<std::string>> distro_desktops = {
+    {"Debian", {"GNOME", "KDE", "XFCE", "LXQT", "No X11 (Server)"}},
+    {"Ubuntu", {"GNOME", "KDE", "XFCE", "LXQT", "No X11 (Server)"}},
+    {"Fedora", {"Kickstart (.ks) required"}},
+    {"Arch Linux", {"Profile directory (e.g., releng)"}}
+};
+
+const std::map<std::string, std::map<std::string, std::string>> version_codename = {
+    {"Debian", {
+        {"12 (bookworm)", "bookworm"}, {"11 (bullseye)", "bullseye"},
+        {"13 (trixie)", "trixie"}, {"unstable (sid)", "sid"},
+        {"10 (buster) [EOL: June 30, 2024]", "buster"}
+    }},
+    {"Ubuntu", {
+        {"24.04 LTS (noble)", "noble"}, {"22.04 LTS (jammy)", "jammy"},
+        {"20.04 LTS (focal)", "focal"}, {"18.04 LTS (bionic)", "bionic"},
+        {"25.10 (questing)", "questing"}, {"25.04 (plucky)", "plucky"},
+        {"24.10 (oracular) [EOL: July 10, 2025]", "oracular"}
+    }},
+    {"Fedora", {
+        {"42", "42"}, {"41", "41"}, {"Rawhide", "Rawhide"}
+    }},
+    {"Arch Linux", {
+        {"Rolling Release", "rolling"}
+    }}
+};
 
 // --- About Dialog ---
 class AboutDialog : public Gtk::AboutDialog {
 public:
     AboutDialog() {
         set_program_name("Linux ISO Builder");
+#ifdef PROJECT_VERSION
         set_version(TOSTRING(PROJECT_VERSION));
+#else
+        set_version("unknown");
+#endif
         set_comments("A GUI tool to help generate commands for building custom Linux ISOs.");
         set_logo_icon_name("drive-harddisk");
     }
@@ -106,9 +142,60 @@ void MainWindow::on_about_clicked() {
     about_dialog->show();
 }
 
-void MainWindow::populate_versions() { /* ... function logic ... */ }
+void MainWindow::populate_versions() {
+    m_combo_version.remove_all();
+    m_combo_desktop.remove_all();
+
+    std::string distro = m_combo_distro.get_active_text();
+    if (distro_versions.count(distro)) {
+        for (const auto& v : distro_versions.at(distro)) {
+            m_combo_version.append(v);
+        }
+        m_combo_version.set_sensitive(true);
+        m_combo_version.set_active(0);
+    } else {
+        m_combo_version.set_sensitive(false);
+    }
+
+    if (distro_desktops.count(distro)) {
+        for (const auto& d : distro_desktops.at(distro)) {
+            m_combo_desktop.append(d);
+        }
+        m_combo_desktop.set_sensitive(true);
+        m_combo_desktop.set_active(0);
+    } else {
+        m_combo_desktop.set_sensitive(false);
+    }
+}
+
 void MainWindow::on_distro_changed() { populate_versions(); }
-void MainWindow::on_generate_clicked() { /* ... function logic ... */ }
+
+void MainWindow::on_generate_clicked() {
+    std::string distro = m_combo_distro.get_active_text();
+    std::string version = m_combo_version.get_active_text();
+    std::string desktop = m_combo_desktop.get_active_text();
+    std::string output;
+
+    if (distro == "Debian" || distro == "Ubuntu") {
+        std::string codename = version_codename.at(distro).at(version);
+        output = "lb config -d " + codename;
+        if (desktop != "No X11 (Server)") {
+            output += " --packages \"";
+            output += Glib::ustring(desktop).lowercase();
+            output += (distro == "Debian" ? "-core\"" : "-desktop\"");
+        }
+        output += "\nsudo lb build";
+    } else if (distro == "Fedora") {
+        output = "sudo lorax --product=\"Fedora\" --version=\"" + version + "\" --release=\"Fedora " + version + "\" ./output fedora.ks\n";
+        output += "# Create a Kickstart (.ks) file and run the above command.";
+    } else if (distro == "Arch Linux") {
+        output = "sudo mkarchiso -v -w /tmp/archiso-work -o . releng\n";
+        output += "# Create a profile directory (e.g., 'releng') and run the above command.";
+    }
+
+    m_text_view.set_buffer(Gtk::TextBuffer::create());
+    m_text_view.get_buffer()->set_text(output);
+}
 
 // --- Application Class ---
 class IsoBuilderApplication : public Gtk::Application {
