@@ -5,15 +5,19 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+env:
+  APP_VERSION: "0.1.0"
+  APP_RELEASE_NAME: "alpha1"
+
 jobs:
-  build-linux:
-    name: Build for Linux (deb, rpm, pkg.zst, tar.xz)
+  build-linux-gui:
+    name: Build GUI for Linux (deb, rpm, pkg.zst, tar.xz)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Generate Version String
-        run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
       - name: Install Dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libgtkmm-4.0-dev rpm zstd
       - name: Configure and Build
@@ -25,9 +29,7 @@ jobs:
       - name: Create Linux Packages
         run: |
           cd build
-          # ADDED: Create .tar.xz archive
           tar -cJf linuxisobuilder-gui-linux.tar.xz linuxisobuilder-gui
-          # .deb
           mkdir -p deb/DEBIAN deb/usr/local/bin
           cp linuxisobuilder-gui deb/usr/local/bin/
           echo "Package: linuxisobuilder-gui" > deb/DEBIAN/control
@@ -37,7 +39,6 @@ jobs:
           echo "Depends: libgtkmm-4.0-1v5" >> deb/DEBIAN/control
           echo "Description: GUI to build custom Linux ISOs." >> deb/DEBIAN/control
           dpkg-deb --build deb linuxisobuilder-gui.deb
-          # .rpm
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
           cp linuxisobuilder-gui ~/rpmbuild/SOURCES/
           cat << EOF > ~/rpmbuild/SPECS/linuxisobuilder.spec
@@ -57,7 +58,6 @@ jobs:
           /usr/local/bin/linuxisobuilder-gui
           EOF
           rpmbuild -bb ~/rpmbuild/SPECS/linuxisobuilder.spec
-          # .pkg.zst
           mkdir -p pkg/usr/local/bin
           cp linuxisobuilder-gui pkg/usr/local/bin/
           echo "pkgname = linuxisobuilder-gui" > pkg/.PKGINFO
@@ -70,22 +70,78 @@ jobs:
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-packages
+          name: linux-gui-packages
           path: |
             build/linuxisobuilder-gui.deb
             build/linuxisobuilder-gui.pkg.zst
             ~/rpmbuild/RPMS/x86_64/*.rpm
-            # ADDED: Include tar.xz in upload
             build/linuxisobuilder-gui-linux.tar.xz
 
-  build-windows:
-    name: Build for Windows (x64)
+  build-linux-cli:
+    name: Build CLI Binary Packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, cross_prefix: "" }
+          - { arch: arm64, cross_prefix: "aarch64-linux-gnu-" }
+          - { arch: i386, cross_prefix: "i686-linux-gnu-" }
+          - { arch: ppc64el, cross_prefix: "powerpc64le-linux-gnu-" }
+          - { arch: riscv64, cross_prefix: "riscv64-linux-gnu-" }
+          - { arch: s390x, cross_prefix: "s390x-linux-gnu-" }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup QEMU for Cross-Compiling
+        uses: docker/setup-qemu-action@v3
+      - name: Generate Version String
+        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev fakeroot
+          if [ "${{ matrix.cross_prefix }}" != "" ]; then
+            CROSS_PREFIX_VAR="${{ matrix.cross_prefix }}"
+            TOOLCHAIN_PKG_NAME="${CROSS_PREFIX_VAR%-}"
+            sudo apt-get install -y gcc-$TOOLCHAIN_PKG_NAME g++-$TOOLCHAIN_PKG_NAME
+          else
+            sudo apt-get install -y build-essential
+          fi
+      - name: Compile the application
+        run: |
+          make CXX=${{ matrix.cross_prefix }}g++ \
+               CXXFLAGS="-std=c++17 -Wall -static-libstdc++ -DPROJECT_VERSION='\"${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}\"' -DTARGET_ARCH='\"${{ matrix.arch }}\"'"
+      - name: Create Binary Packages
+        run: |
+          mkdir -p packages
+          tar -cJf packages/linuxisobuilder-cli_${{ matrix.arch }}.tar.xz build-iso README.md
+          mkdir -p deb/DEBIAN deb/usr/local/bin
+          cp build-iso deb/usr/local/bin/
+          VERSION_STRING="${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}"
+          ARCH="${{ matrix.arch }}"
+          echo "Package: linuxisobuilder-cli" > deb/DEBIAN/control
+          echo "Version: ${VERSION_STRING}" >> deb/DEBIAN/control
+          echo "Section: utils" >> deb/DEBIAN/control
+          echo "Priority: optional" >> deb/DEBIAN/control
+          echo "Architecture: ${ARCH}" >> deb/DEBIAN/control
+          echo "Maintainer: KrzysTheTech <krzysztofdemirkuzniak@gmail.com>" >> deb/DEBIAN/control
+          echo "Description: CLI to build custom Linux ISOs." >> deb/DEBIAN/control
+          fakeroot dpkg-deb --build deb packages/linuxisobuilder-cli_${ARCH}.deb
+      - name: Upload Binary Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-cli-packages-${{ matrix.arch }}
+          path: packages/
+
+  build-windows-gui:
+    name: Build GUI for Windows (x64)
     runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Generate Version String
-        run: echo "VERSION_STRING=0.1.0-alpha1~$(Get-Date -Format 'yyyyMMdd')-${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(Get-Date -Format 'yyyyMMdd')-${{ github.run_number }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with: { msystem: MINGW64, update: true, install: mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-gtkmm4 }
@@ -99,11 +155,11 @@ jobs:
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-packages
+          name: windows-gui-packages
           path: build/linuxisobuilder-gui.exe
 
-  build-macos:
-    name: Build for macOS (Intel & Apple Silicon)
+  build-macos-gui:
+    name: Build GUI for macOS (Intel & Apple Silicon)
     strategy:
       matrix:
         include:
@@ -116,7 +172,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Generate Version String
-        run: echo "VERSION_STRING=0.1.0-alpha1~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
+        run: echo "VERSION_STRING=${{ env.APP_VERSION }}-${{ env.APP_RELEASE_NAME }}~$(date +%Y%m%d)-${{ github.run_number }}" >> $GITHUB_ENV
       - name: Install Dependencies
         run: brew install gtkmm4 pkg-config cmake create-dmg --formula
       - name: Configure and Build
@@ -134,7 +190,7 @@ jobs:
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-packages-${{ matrix.name }}
+          name: macos-gui-packages-${{ matrix.name }}
           path: |
             *.dmg
             *.app.zip
