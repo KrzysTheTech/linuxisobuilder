@@ -108,6 +108,8 @@ MainWindow::MainWindow() :
     m_combo_distro.append("Select a Distribution...");
     m_combo_distro.append("Debian");
     m_combo_distro.append("Ubuntu");
+    m_combo_distro.append("Fedora");        // FIX: Add missing Fedora
+    m_combo_distro.append("Arch Linux");    // FIX: Add missing Arch Linux
     m_distro_frame.set_child(m_combo_distro);
     m_main_box.append(m_distro_frame);
 
@@ -136,10 +138,10 @@ MainWindow::MainWindow() :
 MainWindow::~MainWindow() {}
 
 void MainWindow::on_about_clicked() {
-    auto about_dialog = Gtk::make_managed<AboutDialog>();
-    about_dialog->set_transient_for(*this);
-    about_dialog->set_modal(true);
-    about_dialog->show();
+    AboutDialog about_dialog;
+    about_dialog.set_transient_for(*this);
+    about_dialog.set_modal(true);
+    about_dialog.show();
 }
 
 void MainWindow::populate_versions() {
@@ -155,6 +157,7 @@ void MainWindow::populate_versions() {
         m_combo_version.set_active(0);
     } else {
         m_combo_version.set_sensitive(false);
+        m_combo_version.set_active(-1);     // FIX: Reset selection if not valid
     }
 
     if (distro_desktops.count(distro)) {
@@ -165,6 +168,7 @@ void MainWindow::populate_versions() {
         m_combo_desktop.set_active(0);
     } else {
         m_combo_desktop.set_sensitive(false);
+        m_combo_desktop.set_active(-1);     // FIX: Reset selection if not valid
     }
 }
 
@@ -177,20 +181,27 @@ void MainWindow::on_generate_clicked() {
     std::string output;
 
     if (distro == "Debian" || distro == "Ubuntu") {
-        std::string codename = version_codename.at(distro).at(version);
-        output = "lb config -d " + codename;
-        if (desktop != "No X11 (Server)") {
-            output += " --packages \"";
-            output += Glib::ustring(desktop).lowercase();
-            output += (distro == "Debian" ? "-core\"" : "-desktop\"");
+        if (version_codename.at(distro).count(version)) { // FIX: Check if version exists
+            std::string codename = version_codename.at(distro).at(version);
+            output = "lb config -d " + codename;
+            if (desktop != "No X11 (Server)") {
+                output += " --packages \"";
+                Glib::ustring desktop_str(desktop);
+                output += desktop_str.lowercase();
+                output += (distro == "Debian" ? "-core\"" : "-desktop\"");
+            }
+            output += "\nsudo lb build";
+        } else {
+            output = "# Please select a valid version.";
         }
-        output += "\nsudo lb build";
     } else if (distro == "Fedora") {
         output = "sudo lorax --product=\"Fedora\" --version=\"" + version + "\" --release=\"Fedora " + version + "\" ./output fedora.ks\n";
         output += "# Create a Kickstart (.ks) file and run the above command.";
     } else if (distro == "Arch Linux") {
         output = "sudo mkarchiso -v -w /tmp/archiso-work -o . releng\n";
         output += "# Create a profile directory (e.g., 'releng') and run the above command.";
+    } else {
+        output = "# Please select a distribution.";
     }
 
     m_text_view.set_buffer(Gtk::TextBuffer::create());
